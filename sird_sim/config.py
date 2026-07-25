@@ -5,6 +5,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
+from domain.place import PlaceType
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -59,6 +60,11 @@ class SimulationConfig:
     min_friend_count: int
     max_friend_count: int
     friend_weight: float
+
+    # ============================================================
+    # Contact system config
+    # ============================================================
+    contact_k: Mapping[PlaceType, int]
 
     def __post_init__(self) -> None:
         # ========================================================
@@ -204,9 +210,72 @@ class SimulationConfig:
             "friend_weight",
         )
 
+        # ========================================================
+        # Contact validation
+        # ========================================================
+        self._validate_contact_k(
+            self.contact_k,
+            "contact_k",
+        )
+
     # ============================================================
     # Validation helpers
     # ============================================================
+    @staticmethod
+    def _validate_contact_k(
+        value: Mapping[PlaceType, int],
+        name: str = "contact_k",
+    ) -> None:
+        if not isinstance(value, Mapping):
+            raise TypeError(
+                f"{name} must be a mapping from PlaceType to int"
+            )
+
+        expected_place_types = {
+            PlaceType.HOME,
+            PlaceType.WORKPLACE,
+            PlaceType.SCHOOL,
+            PlaceType.PUBLIC,
+        }
+
+        for place_type, contact_count in value.items():
+            if not isinstance(place_type, PlaceType):
+                raise TypeError(
+                    f"All keys in {name} must be PlaceType values; "
+                    f"received {place_type!r}"
+                )
+
+            if (
+                isinstance(contact_count, bool)
+                or not isinstance(contact_count, int)
+            ):
+                raise TypeError(
+                    f"All values in {name} must be integers; "
+                    f"received {contact_count!r} for {place_type.name}"
+                )
+
+            if contact_count < 0:
+                raise ValueError(
+                    f"All values in {name} must be non-negative; "
+                    f"received {contact_count} for {place_type.name}"
+                )
+
+        actual_place_types = set(value)
+
+        missing_place_types = (
+            expected_place_types - actual_place_types
+        )
+
+        if missing_place_types:
+            missing_names = sorted(
+                place_type.name
+                for place_type in missing_place_types
+            )
+
+            raise ValueError(
+                f"{name} is missing required PlaceType entries: "
+                f"{missing_names}"
+            )
 
     @staticmethod
     def _validate_hour(

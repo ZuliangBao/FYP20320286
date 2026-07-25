@@ -10,7 +10,8 @@ class World:
     persons: dict[int, Person] = field(default_factory=dict)
     places: dict[int, Place] = field(default_factory=dict)
     relationships: dict[int, list[Relationship]] = field(default_factory=dict)
-
+    pending_contacts: set[tuple[int, int]] = field(default_factory=set)
+    
     rng: np.random.Generator = field(
         default_factory=np.random.default_rng
     )
