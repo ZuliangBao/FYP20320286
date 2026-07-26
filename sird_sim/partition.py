@@ -98,11 +98,144 @@ def _validate_and_materialize_indices(
 
     return member_indices
 
+
+
+def _build_reachable_table(
+    total_members: int,
+    group_sizes: npt.NDArray[np.int64],
+) -> npt.NDArray[np.bool_]:
+    """
+    reachable [n] indicates whether n members can be precisely formed by the allowed group size.
+    """
+    reachable = np.zeros(
+        total_members + 1,
+        dtype=np.bool_,
+    )
+
+    reachable[0] = True
+
+    for member_count in range(1, total_members + 1):
+        usable_sizes = group_sizes[
+            group_sizes <= member_count
+        ]
+
+        if usable_sizes.size == 0:
+            continue
+
+        previous_counts = member_count - usable_sizes
+
+        reachable[member_count] = bool(
+            np.any(reachable[previous_counts])
+        )
+
+    return reachable
+def largest_partitionable_count(
+    total_count: int,
+    allowed_sizes: Collection[int],
+) -> int:
+    """
+    Find the largest value no greater than total_count that can be
+    represented as a sum of allowed group sizes.
+    """
+    if (
+        isinstance(total_count, bool)
+        or not isinstance(total_count, int)
+    ):
+        raise ValueError(
+            "total_count must be a non-negative integer"
+        )
+
+    if total_count < 0:
+        raise ValueError(
+            "total_count cannot be negative"
+        )
+
+    raw_sizes = list(allowed_sizes)
+
+    if not raw_sizes:
+        raise ValueError(
+            "allowed_sizes cannot be empty"
+        )
+
+    if any(
+        isinstance(size, bool)
+        or not isinstance(size, int)
+        or size <= 0
+        for size in raw_sizes
+    ):
+        raise ValueError(
+            "allowed_sizes must contain positive integers"
+        )
+
+    sizes = sorted(set(raw_sizes))
+
+    reachable = _build_reachable_table(
+        total_members=total_count,
+        group_sizes=np.asarray(
+            sizes,
+            dtype=np.int64,
+        ),
+    )
+
+    reachable_counts = np.flatnonzero(reachable)
+
+    if reachable_counts.size == 0:
+        raise RuntimeError(
+            "No partitionable count found"
+        )
+
+    return int(reachable_counts[-1])
+
+def _partition_indices(
+    shuffled_indices: npt.NDArray[np.int64],
+    distribution: _Partition,
+    reachable: npt.NDArray[np.bool_],
+    rng: np.random.Generator,
+) -> list[set[int]]:
+    """
+    Complete the actual segmentation using the prepared distribution and accessibility tables.
+    """
+    groups: list[set[int]] = []
+
+    current_position = 0
+    remaining_members = len(shuffled_indices)
+
+    while remaining_members > 0:
+        eligible_positions = _find_eligible_positions(
+            remaining_members=remaining_members,
+            group_sizes=distribution.sizes,
+            reachable=reachable,
+        )
+
+        selected_size = _sample_group_size(
+            eligible_positions=eligible_positions,
+            distribution=distribution,
+            rng=rng,
+        )
+
+        group_end = current_position + selected_size
+
+        selected_members = shuffled_indices[
+            current_position:group_end
+        ]
+
+        groups.append(
+            {
+                int(member_index)
+                for member_index in selected_members
+            }
+        )
+
+        current_position = group_end
+        remaining_members -= selected_size
+
+    return groups
+
 def _prepare_distribution(
     size_distribution: Mapping[int, float],
 ) -> _Partition:
     """
-    Verify the size distribution and convert it into a sorted NumPy array.
+    Verify the size distribution and convert it into sorted NumPy arrays.
     """
     if not size_distribution:
         raise ValueError(
@@ -119,6 +252,12 @@ def _prepare_distribution(
         ):
             raise ValueError(
                 "Every group size must be a positive integer"
+            )
+
+        if isinstance(weight, bool):
+            raise ValueError(
+                f"Weight for group size {group_size} "
+                "must be numeric"
             )
 
         try:
@@ -167,122 +306,6 @@ def _prepare_distribution(
         sizes=sizes,
         weights=weights,
     )
-
-def _build_reachable_table(
-    total_members: int,
-    group_sizes: npt.NDArray[np.int64],
-) -> npt.NDArray[np.bool_]:
-    """
-    reachable [n] indicates whether n members can be precisely formed by the allowed group size.
-    """
-    reachable = np.zeros(
-        total_members + 1,
-        dtype=np.bool_,
-    )
-
-    reachable[0] = True
-
-    for member_count in range(1, total_members + 1):
-        usable_sizes = group_sizes[
-            group_sizes <= member_count
-        ]
-
-        if usable_sizes.size == 0:
-            continue
-
-        previous_counts = member_count - usable_sizes
-
-        reachable[member_count] = bool(
-            np.any(reachable[previous_counts])
-        )
-
-    return reachable
-
-def _partition_indices(
-    shuffled_indices: npt.NDArray[np.int64],
-    distribution: _Partition,
-    reachable: npt.NDArray[np.bool_],
-    rng: np.random.Generator,
-) -> list[set[int]]:
-    """
-    Complete the actual segmentation using the prepared distribution and accessibility tables.
-    """
-    groups: list[set[int]] = []
-
-    current_position = 0
-    remaining_members = len(shuffled_indices)
-
-    while remaining_members > 0:
-        eligible_positions = _find_eligible_positions(
-            remaining_members=remaining_members,
-            group_sizes=distribution.sizes,
-            reachable=reachable,
-        )
-
-        selected_size = _sample_group_size(
-            eligible_positions=eligible_positions,
-            distribution=distribution,
-            rng=rng,
-        )
-
-        group_end = current_position + selected_size
-
-        selected_members = shuffled_indices[
-            current_position:group_end
-        ]
-
-        groups.append(
-            {
-                int(member_index)
-                for member_index in selected_members
-            }
-        )
-
-        current_position = group_end
-        remaining_members -= selected_size
-
-    return groups
-
-def largest_partitionable_count(
-    total_count: int,
-    allowed_sizes: Collection[int],
-) -> int:
-    """
-    Find the largest value no greater than total_count that can be
-    represented as a sum of allowed group sizes.
-    """
-    if total_count < 0:
-        raise ValueError(
-            "total_count cannot be negative"
-        )
-
-    sizes = sorted(set(allowed_sizes))
-
-    if not sizes:
-        raise ValueError(
-            "allowed_sizes cannot be empty"
-        )
-
-    if any(
-        isinstance(size, bool)
-        or not isinstance(size, int)
-        or size <= 0
-        for size in sizes
-    ):
-        raise ValueError(
-            "allowed_sizes must contain positive integers"
-        )
-
-    reachable = _build_reachable_table(
-        total_members=total_count,
-        group_sizes=np.asarray(sizes, dtype=np.int64),
-    )
-
-    for count in range(total_count, -1, -1):
-        if reachable[count]:
-            return count
-
-    raise RuntimeError("No partitionable count found")
 
 def _find_eligible_positions(
     remaining_members: int,

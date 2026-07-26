@@ -1,3 +1,8 @@
+from ..world import World
+from ..domain.person import Person, HealthState, Role
+from ..domain.place import PlaceType
+from typing import Optional
+
 class ScheduleSystem:
 
     def step(self, world: World) -> None:
