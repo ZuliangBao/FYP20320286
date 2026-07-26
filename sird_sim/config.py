@@ -5,7 +5,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
-from domain.place import PlaceType
+from .domain.place import PlaceType
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -29,6 +29,8 @@ class SimulationConfig:
     # Probability of visiting public places
     public_visit_probability_weekday: float
     public_visit_probability_weekend: float
+
+
 
     # ============================================================
     # Population, place, and relationship generation
@@ -65,6 +67,14 @@ class SimulationConfig:
     # Contact system config
     # ============================================================
     contact_k: Mapping[PlaceType, int]
+
+    # ============================================================
+    # Disease transmission and progression
+    # ============================================================
+    tick_duration: float
+    infection_probability: float
+    recovery_rate: float
+    deadly_rate: float
 
     def __post_init__(self) -> None:
         # ========================================================
@@ -216,6 +226,27 @@ class SimulationConfig:
         self._validate_contact_k(
             self.contact_k,
             "contact_k",
+        )
+
+
+        self._validate_positive_number(
+            self.tick_duration,
+            "tick_duration",
+        )
+
+        self._validate_probability(
+            self.infection_probability,
+            "infection_probability",
+        )
+
+        self._validate_probability_below_one(
+            self.recovery_rate,
+            "recovery_rate",
+        )
+
+        self._validate_probability_below_one(
+            self.deadly_rate,
+            "deadly_rate",
         )
 
     # ============================================================
@@ -425,6 +456,42 @@ class SimulationConfig:
                     f"received weight {weight} for size {group_size}"
                 )
 
+    @staticmethod
+    def _validate_probability_below_one(
+        value: float,
+        name: str,
+    ) -> None:
+        if isinstance(value, bool) or not isinstance(
+            value,
+            (int, float),
+        ):
+            raise TypeError(f"{name} must be a number")
+
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite")
+
+        if not 0.0 <= value < 1.0:
+            raise ValueError(f"{name} must be in [0.0, 1.0)")
+
+
+    @staticmethod
+    def _validate_positive_number(
+        value: float,
+        name: str,
+    ) -> None:
+        if isinstance(value, bool) or not isinstance(
+            value,
+            (int, float),
+        ):
+            raise TypeError(f"{name} must be a number")
+
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite")
+
+        if value <= 0.0:
+            raise ValueError(f"{name} must be greater than 0")
+
+
     # ============================================================
     # Serialization
     # ============================================================
@@ -494,3 +561,5 @@ class SimulationConfig:
             )
 
         return cls.from_dict(data)
+
+    

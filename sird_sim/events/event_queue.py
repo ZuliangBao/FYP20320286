@@ -11,49 +11,169 @@ logger = logging.getLogger(__name__)
 
 
 class EventQueue:
-    """对 heapq 的薄封装：只负责按时间顺序吐出事件，不知道任何业务逻辑。
+    """
+    Priority queue for simulation events.
 
-    堆里存 (time, sequence, event) 三元组：
-    - time 是主排序键
-    - sequence 是同一时刻的 tie-breaker，保证同一个 seed 下处理顺序完全确定
-    - heapq 比较 tuple 时，time/sequence 就已经能分出大小，永远不会去比较
-      event 对象本身，所以 Event 不需要实现 __lt__。
+    The heap stores:
+
+        (time, sequence, event)
+
+    Cancelled events use lazy deletion. They remain physically inside
+    the heap until they reach the front, but they are no longer counted
+    as active events.
     """
 
     def __init__(self) -> None:
         self._heap: list[tuple[float, int, Event]] = []
         self._sequence_counter = itertools.count()
 
-    def schedule(self, event_cls: type[Event], *, time: float, person_id: int, **extra) -> Event:
+        # Number of non-cancelled events still scheduled in this queue.
+        self._active_count = 0
+
+        # sequence -> Event
+        #
+        # Used to distinguish queued events from events that have
+        # already been popped, and to prevent incorrect double counting.
+        self._queued_events: dict[int, Event] = {}
+
+    def schedule(
+        self,
+        event_cls: type[Event],
+        *,
+        time: float,
+        person_id: int,
+        **extra,
+    ) -> Event:
+        sequence = next(self._sequence_counter)
+
         event = event_cls(
             time=time,
-            sequence=next(self._sequence_counter),
+            sequence=sequence,
             person_id=person_id,
             **extra,
         )
-        heapq.heappush(self._heap, (event.time, event.sequence, event))
-        logger.debug("scheduled %s person_id=%s t=%.2f", event.kind, person_id, time)
+
+        heapq.heappush(
+            self._heap,
+            (event.time, event.sequence, event),
+        )
+
+        self._queued_events[event.sequence] = event
+        self._active_count += 1
+
+        logger.debug(
+            "scheduled %s person_id=%s t=%.2f",
+            event.kind,
+            person_id,
+            time,
+        )
+
         return event
 
-    def pop_next(self) -> Optional[Event]:
-        """弹出下一个未被取消的事件；队列空则返回 None。"""
+    def _discard_cancelled_front(self) -> None:
+        """
+        Physically remove consecutive cancelled events from the front.
+
+        Their active-count decrement already occurred in cancel(), so
+        removing them here must not change _active_count again.
+        """
         while self._heap:
-            _, _, event = heapq.heappop(self._heap)
-            if event.cancelled:
-                logger.debug("skip cancelled %s person_id=%s", event.kind, event.person_id)
-                continue
-            return event
-        return None
+            _, _, event = self._heap[0]
+
+            if not event.cancelled:
+                break
+
+            heapq.heappop(self._heap)
+            self._queued_events.pop(event.sequence, None)
+
+            logger.debug(
+                "discard cancelled %s person_id=%s t=%.2f",
+                event.kind,
+                event.person_id,
+                event.time,
+            )
 
     def peek_time(self) -> Optional[float]:
-        """只看下一个事件的时间，不弹出。"""
-        return self._heap[0][0] if self._heap else None
+        """
+        Return the time of the next active event.
+
+        This method may physically discard cancelled events from the
+        front, but it does not remove the next active event.
+        """
+        self._discard_cancelled_front()
+
+        if not self._heap:
+            return None
+
+        return self._heap[0][0]
+
+    def pop_next(self) -> Optional[Event]:
+        """
+        Pop and return the next active event.
+
+        Return None when no active event remains.
+        """
+        self._discard_cancelled_front()
+
+        if not self._heap:
+            return None
+
+        _, _, event = heapq.heappop(self._heap)
+
+        self._queued_events.pop(event.sequence)
+        self._active_count -= 1
+
+        logger.debug(
+            "popped %s person_id=%s t=%.2f",
+            event.kind,
+            event.person_id,
+            event.time,
+        )
+
+        return event
 
     def cancel(self, event: Event) -> None:
-        event.cancelled = True  # 懒删除：不从堆里搬移，弹出时再跳过
+        """
+        Cancel an event using lazy deletion.
+
+        The event stops counting as active immediately, but remains in
+        the heap until it reaches the front.
+        """
+        queued_event = self._queued_events.get(event.sequence)
+
+        if queued_event is not event:
+            raise ValueError(
+                "Cannot cancel an event that is not currently "
+                "scheduled in this EventQueue"
+            )
+
+        # Make cancellation idempotent.
+        if event.cancelled:
+            return
+
+        event.cancelled = True
+        self._active_count -= 1
+
+        logger.debug(
+            "cancelled %s person_id=%s t=%.2f",
+            event.kind,
+            event.person_id,
+            event.time,
+        )
 
     def is_empty(self) -> bool:
-        return not self._heap
+        """
+        Return True when no active events remain.
+
+        If every remaining heap entry is cancelled, clean them up now.
+        """
+        if self._active_count == 0:
+            self._discard_cancelled_front()
+
+        return self._active_count == 0
 
     def __len__(self) -> int:
-        return len(self._heap)
+        """
+        Return the number of active, non-cancelled events.
+        """
+        return self._active_count
