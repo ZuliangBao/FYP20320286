@@ -8,6 +8,8 @@ from .systems.metrics_system import MetricsSystem
 from .systems.schedule_system import ScheduleSystem
 from .systems.transmission_system import TransmissionSystem
 from .world import World
+from dataclasses import replace
+from typing import Any
 
 
 class Engine:
@@ -125,6 +127,45 @@ class Engine:
 
         for _ in range(total_ticks):
             self.step()
+
+    def update_runtime_config(self,**overrides: Any) -> None:
+        """
+        Replace the runtime configuration.
+    
+        Existing recovery/death outcome events are rescheduled only when
+        recovery_rate or deadly_rate actually changes.
+        """
+        if not overrides:
+            return
+    
+        old_config = self.world.config
+    
+        if old_config is None:
+            raise RuntimeError(
+                "world.config must be set before updating runtime config"
+            )
+    
+        # Construct and validate the replacement before changing World.
+        # Unknown field names and invalid values propagate to the caller.
+        new_config = replace(
+            old_config,
+            **overrides,
+        )
+    
+        outcome_rates_changed = (
+            new_config.recovery_rate
+            != old_config.recovery_rate
+            or new_config.deadly_rate
+            != old_config.deadly_rate
+        )
+    
+        # reschedule_all_infected() must see the new rates.
+        self.world.config = new_config
+    
+        if outcome_rates_changed:
+            self.health_event_system.reschedule_all_infected(
+                self.world
+            )
 
     @staticmethod
     def _validate_total_days(

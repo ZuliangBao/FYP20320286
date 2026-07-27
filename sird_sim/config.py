@@ -76,6 +76,11 @@ class SimulationConfig:
     recovery_rate: float
     deadly_rate: float
 
+    # ============================================================
+    # Rng seed
+    # ============================================================
+    seed: int | None = None
+
     def __post_init__(self) -> None:
         # ========================================================
         # Schedule validation
@@ -249,6 +254,18 @@ class SimulationConfig:
             "deadly_rate",
         )
 
+
+        # ========================================================
+        # Rng validation
+        # ========================================================        
+        if self.seed is not None:
+            if isinstance(self.seed, bool) or not isinstance(
+                self.seed,
+                int,
+            ):
+                raise ValueError(
+                    "seed must be an integer or None"
+                )
     # ============================================================
     # Validation helpers
     # ============================================================

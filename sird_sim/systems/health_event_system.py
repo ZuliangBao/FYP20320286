@@ -1,20 +1,12 @@
 from __future__ import annotations
-
 import math
 from collections.abc import Callable
-
 from ..domain.person import HealthState
-from ..events.event import (
-    DieEvent,
-    Event,
-    EventType,
-    RecoverEvent,
-)
+from ..events.event import (DieEvent,Event,EventType,RecoverEvent)
+from ..domain.person import HealthState, Person
 from ..world import World
 
-
 EventHandler = Callable[[World, Event], None]
-
 
 class HealthEventSystem:
     """
@@ -93,17 +85,8 @@ class HealthEventSystem:
         event: Event,
     ) -> None:
         """
-        Change the person to INFECTED and schedule either recovery or
-        death using competing continuous-time hazards.
+        Change the person to INFECTED and schedule their disease outcome.
         """
-        config = world.config
-        current_time = world.current_time
-
-        if config is None or current_time is None:
-            raise RuntimeError(
-                "World configuration and current time are required"
-            )
-
         person = world.get_person(event.person_id)
 
         # A terminal state must not be overwritten by a stale event.
@@ -113,6 +96,31 @@ class HealthEventSystem:
             return
 
         person.health_state = HealthState.INFECTED
+
+        self._schedule_outcome(
+            world,
+            person,
+        )
+
+    def _schedule_outcome(
+        self,
+        world: World,
+        person: Person,
+    ) -> None:
+        """
+        Schedule either recovery or death for an infected person using
+        competing continuous-time hazards.
+
+        If both hazards are zero, the person remains infected indefinitely
+        and no outcome event is scheduled.
+        """
+        config = world.config
+        current_time = world.current_time
+
+        if config is None or current_time is None:
+            raise RuntimeError(
+                "World configuration and current time are required"
+            )
 
         lambda_recover = self._probability_to_hazard(
             probability=config.recovery_rate,
@@ -154,9 +162,37 @@ class HealthEventSystem:
                 person_id=person.person_id,
             )
 
-        # Replace the BecomeInfectiousEvent reference with the newly
-        # scheduled outcome event.
         person.pending_event = outcome_event
+
+    def reschedule_all_infected(
+        self,
+        world: World,
+    ) -> None:
+        """
+        Reschedule recovery/death outcomes for every currently infected
+        person using the current runtime configuration.
+    
+        Existing outcome events are cancelled first. New waiting times are
+        sampled from world.current_time because exponential waiting times
+        are memoryless.
+        """
+        for person in world.persons.values():
+            if person.health_state != HealthState.INFECTED:
+                continue
+            
+            old_event = person.pending_event
+    
+            if old_event is not None:
+                world.event_queue.cancel(old_event)
+    
+                # Avoid leaving a reference to an event that is already
+                # logically cancelled if scheduling the replacement fails.
+                person.pending_event = None
+    
+            self._schedule_outcome(
+                world,
+                person,
+            )
 
     def _handle_recover(
         self,

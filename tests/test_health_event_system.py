@@ -721,3 +721,84 @@ def test_stale_immunity_wanes_event_does_not_clear_newer_pending_event(
 
     assert person.health_state == HealthState.DEAD
     assert person.pending_event is newer_event
+
+def test_reschedule_all_infected_replaces_existing_events(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.INFECTED
+
+    old_event = minimal_world.event_queue.schedule(
+        RecoverEvent,
+        time=100.0,
+        person_id=person.person_id,
+    )
+    person.pending_event = old_event
+
+    health_event_system.reschedule_all_infected(
+        minimal_world
+    )
+
+    assert old_event.cancelled is True
+    assert person.pending_event is not None
+    assert person.pending_event is not old_event
+    assert len(minimal_world.event_queue) == 1
+
+def test_reschedule_all_infected_skips_non_infected_people(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.SUSCEPTIBLE
+    person.pending_event = None
+
+    health_event_system.reschedule_all_infected(
+        minimal_world
+    )
+
+    assert person.pending_event is None
+    assert minimal_world.event_queue.is_empty()
+
+def test_reschedule_all_infected_handles_missing_old_event(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.INFECTED
+    person.pending_event = None
+
+    health_event_system.reschedule_all_infected(
+        minimal_world
+    )
+
+    assert isinstance(
+        person.pending_event,
+        (RecoverEvent, DieEvent),
+    )
+    assert len(minimal_world.event_queue) == 1
+
+def test_reschedule_all_infected_with_zero_hazards_cancels_old_event_only(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    minimal_world.config.recovery_rate = 0.0
+    minimal_world.config.deadly_rate = 0.0
+
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.INFECTED
+
+    old_event = minimal_world.event_queue.schedule(
+        RecoverEvent,
+        time=100.0,
+        person_id=person.person_id,
+    )
+    person.pending_event = old_event
+
+    health_event_system.reschedule_all_infected(
+        minimal_world
+    )
+
+    assert old_event.cancelled is True
+    assert person.pending_event is None
+    assert minimal_world.event_queue.is_empty()

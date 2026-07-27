@@ -16,7 +16,7 @@ from .domain.place import PlaceType
 TICK_DURATION_OPTIONS = [0.25, 0.5, 1.0, 3.0, 6.0, 12.0, 24.0]
 
 DEFAULT_GENERATION: dict[str, Any] = {
-    "population_size": 1_000,
+    "population_size": 100,
     "tick_duration": 1.0,
     "student_ratio": 0.25,
     "employment_rate": 0.90,
@@ -33,6 +33,8 @@ DEFAULT_GENERATION: dict[str, Any] = {
     "min_friend_count": 3,
     "max_friend_count": 8,
     "friend_weight": 1.0,
+    "use_fixed_seed": 42,
+    "seed": 42,
 }
 
 DEFAULT_RUNTIME: dict[str, Any] = {
@@ -127,8 +129,29 @@ def _render_generation_controls() -> dict[str, Any]:
     disabled = bool(st.session_state["has_generated"])
 
     st.header("World generation")
+
     if disabled:
         st.caption("Generation parameters are locked after generation.")
+
+        confirm_reset = st.checkbox(
+            (
+                "I understand that editing these parameters will "
+                "discard the current simulation results."
+            ),
+            value=False,
+            key="ui_confirm_reset",
+        )
+
+        edit_generation_parameters = st.button(
+            "Edit generation parameters",
+            disabled=not confirm_reset,
+            use_container_width=True,
+            key="ui_edit_generation_parameters",
+        )
+
+        if edit_generation_parameters:
+            st.session_state["has_generated"] = False
+            st.rerun()
 
     population_size = int(
         st.number_input(
@@ -139,6 +162,22 @@ def _render_generation_controls() -> dict[str, Any]:
             step=100,
             disabled=disabled,
             key="ui_population_size",
+        )
+    )
+
+    initial_infection_count = int(
+        st.number_input(
+            "Initial infected households",
+            min_value=0,
+            max_value=population_size,
+            value=1,
+            step=1,
+            disabled=disabled,
+            key="ui_initial_infection_count",
+            help=(
+                "Seeds at most one initially infected person "
+                "per selected household."
+            ),
         )
     )
 
@@ -158,6 +197,29 @@ def _render_generation_controls() -> dict[str, Any]:
             ),
         )
     )
+
+    use_fixed_seed = st.checkbox(
+        "Use fixed random seed",
+        value=DEFAULT_GENERATION["use_fixed_seed"],
+        disabled=disabled,
+        key="ui_use_fixed_seed",
+        help=(
+            "Using the same seed and configuration reproduces "
+            "the same generated world."
+        ),
+    )
+
+    seed_value = int(
+        st.number_input(
+            "Random seed",
+            value=DEFAULT_GENERATION["seed"],
+            step=1,
+            disabled=disabled or not use_fixed_seed,
+            key="ui_seed",
+        )
+    )
+
+    seed = seed_value if use_fixed_seed else None
 
     student_ratio = float(
         st.slider(
@@ -310,6 +372,8 @@ def _render_generation_controls() -> dict[str, Any]:
     return {
         "population_size": population_size,
         "tick_duration": tick_duration,
+        "initial_infection_count": initial_infection_count,
+        "seed": seed,
         "student_ratio": student_ratio,
         "employment_rate": employment_rate,
         "school_utilization_rate": school_utilization_rate,
@@ -448,7 +512,7 @@ def _render_regenerate_button(
     runtime_values: Mapping[str, Any],
 ) -> None:
     if not st.button(
-        "Regenerate world",
+        "Generate world",
         type="primary",
         use_container_width=True,
     ):
@@ -459,6 +523,8 @@ def _render_regenerate_button(
     try:
         config = _build_config(generation_values, runtime_values)
         world = controller.generate(config)
+        controller.seed_infections(world,count=generation_values["initial_infection_count"],
+)
         engine, metrics_system = controller.build_engine(world, config)
 
         st.session_state.update(
@@ -508,14 +574,17 @@ def _render_continue_button(
             for name, value in runtime_values.items()
             if getattr(world.config, name) != value
         }
+        print(f"changed_overrides = {changed_overrides}", flush=True)
+        
         if changed_overrides:
             controller.update_runtime_config(
-                world,
+                engine,
                 **changed_overrides,
             )
-            st.session_state["current_config"] = world.config
+            st.session_state["current_config"] = engine.world.config
 
         controller.run(engine, total_days)
+
         st.session_state["day_count"] += total_days
         st.success(f"Simulation advanced by {total_days:g} days.")
     except Exception as exc:
@@ -529,6 +598,7 @@ def _build_config(
     generation_kwargs = {
         "population_size": generation_values["population_size"],
         "tick_duration": generation_values["tick_duration"],
+        "seed": generation_values["seed"],
         "student_ratio": generation_values["student_ratio"],
         "employment_rate": generation_values["employment_rate"],
         "school_utilization_rate": generation_values["school_utilization_rate"],
@@ -689,3 +759,5 @@ def _mapping_to_json(mapping: Mapping[int, float]) -> str:
         indent=2,
         sort_keys=True,
     )
+
+
