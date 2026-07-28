@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass, field
 from .domain.person import Person
 from .domain.place import Place
@@ -5,6 +6,7 @@ from .domain.relationship import Relationship
 from .config import SimulationConfig
 from .events.event_queue import EventQueue
 import numpy as np
+
 
 @dataclass
 class World:
@@ -56,3 +58,30 @@ class World:
     ) -> None:
         self.remove_from_place(person)
         self.add_to_place(person, place_id)
+
+    def require_config(self) -> SimulationConfig:
+        """
+        Return the simulation config or fail when the World has not
+        been fully initialized.
+        """
+        config = self.config
+
+        if config is None:
+            raise RuntimeError(
+                "world.config must be set"
+            )
+
+        return config
+
+    def require_current_time(self) -> float:
+        """
+        Return the current simulation time or fail when it is unset.
+        """
+        current_time = self.current_time
+
+        if current_time is None:
+            raise RuntimeError(
+                "world.current_time must be set"
+            )
+
+        return current_time

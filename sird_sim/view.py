@@ -574,7 +574,7 @@ def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
             st.number_input(
                 "Mean immunity duration (days)",
                 min_value=0.01,
-                value=90.0,
+                value=30.0,
                 step=1.0,
                 key="ui_mean_immunity_duration_days",
                 help=(
@@ -992,7 +992,7 @@ def _render_mobility_comparison() -> None:
         st.number_input(
             "Comparison duration (days)",
             min_value=1.0,
-            value=60.0,
+            value=30.0,
             step=1.0,
             key="ui_mobility_comparison_days",
         )

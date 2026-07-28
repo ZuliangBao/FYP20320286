@@ -50,19 +50,17 @@ class MetricsSystem:
         """
         Count people in each health state and append one snapshot.
         """
-        if world.current_time is None:
+        current_time = world.current_time
+        if current_time is None:
             raise RuntimeError(
                 "world.current_time must be set before "
                 "MetricsSystem.step()"
             )
 
-        self._record_health_metrics(world)
-        self._record_occupancy_metrics(world)
+        self._record_health_metrics(world, current_time)
+        self._record_occupancy_metrics(world, current_time)
 
-    def _record_health_metrics(
-        self,
-        world: World,
-    ) -> None:
+    def _record_health_metrics(self, world: World, current_time: float) -> None:
         state_counts = Counter(
             person.health_state
             for person in world.persons.values()
@@ -70,7 +68,7 @@ class MetricsSystem:
 
         self.history.append(
             MetricsSnapshot(
-                time=world.current_time,
+                time=current_time,
                 susceptible=state_counts[
                     HealthState.SUSCEPTIBLE
                 ],
@@ -86,10 +84,7 @@ class MetricsSystem:
             )
         )
 
-    def _record_occupancy_metrics(
-        self,
-        world: World,
-    ) -> None:
+    def _record_occupancy_metrics(self, world: World, current_time: float) -> None:
         occupancy_counts: Counter[PlaceType] = Counter()
 
         for place in world.places.values():
@@ -99,7 +94,7 @@ class MetricsSystem:
 
         self.occupancy_history.append(
             OccupancySnapshot(
-                time=world.current_time,
+                time=current_time,
                 home=occupancy_counts[PlaceType.HOME],
                 workplace=occupancy_counts[
                     PlaceType.WORKPLACE
