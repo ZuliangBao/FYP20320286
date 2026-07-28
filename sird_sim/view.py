@@ -12,6 +12,12 @@ from . import controller, plotting
 from .config import ImmunityDurationMode,SimulationConfig
 from .domain.place import PlaceType
 
+from .mobility_experiment import (
+    MobilityScenario,
+    draw_mobility_comparison,
+    run_mobility_comparison,
+)
+
 MAX_POPULATION_SIZE = 1_000
 
 TICK_DURATION_OPTIONS = [0.25, 0.5, 1.0, 3.0, 6.0, 12.0, 24.0]
@@ -130,7 +136,7 @@ def _initialize_session_state() -> None:
         "current_config": None,
         "day_count": 0.0,
         "_notice": None,
-
+        "mobility_comparison_results": None,
         # Widget initial value
         "ui_population_size": DEFAULT_GENERATION[
             "population_size"
@@ -182,7 +188,7 @@ def _render_generation_controls() -> dict[str, Any]:
         st.session_state["has_generated"] = False
         st.rerun()
 
-    with st.expander("Generation parameter"):
+    with st.expander("Generation parameter",expanded=True):
         population_size = int(
             st.number_input(
                 "Population size",
@@ -335,6 +341,7 @@ def _render_generation_controls() -> dict[str, Any]:
             )
         )
 
+    with st.expander("Contact Strength",expanded=False):
         workmate_target_degree = int(
             st.number_input(
                 "Workmate target degree",
@@ -813,15 +820,40 @@ def _render_results(metrics_system: Any) -> None:
         st.info("No simulation ticks have been run yet.")
         return
 
-    sird_tab, occupancy_tab = st.tabs(["SIRD states", "Place occupancy"])
+    sird_tab, occupancy_tab, mobility_tab = st.tabs(
+        [
+            "SIRD states",
+            "Place occupancy",
+            "Mobility comparison",
+        ]
+    )
+
     with sird_tab:
-        _display_plot(lambda: plotting.draw_sird_chart(metrics_system.history))
-    with occupancy_tab:
-        _display_plot(
-            lambda: plotting.draw_occupancy_chart(
-                metrics_system.occupancy_history
+        if not metrics_system.history:
+            st.info(
+                "No simulation ticks have been run yet."
             )
-        )
+        else:
+            _display_plot(
+                lambda: plotting.draw_sird_chart(
+                    metrics_system.history
+                )
+            )
+
+    with occupancy_tab:
+        if not metrics_system.occupancy_history:
+            st.info(
+                "No occupancy snapshots are available."
+            )
+        else:
+            _display_plot(
+                lambda: plotting.draw_occupancy_chart(
+                    metrics_system.occupancy_history
+                )
+            )
+
+    with mobility_tab:
+        _render_mobility_comparison()
 
 
 def _render_generation_plots(world: Any) -> None:
@@ -909,3 +941,132 @@ def _mapping_to_json(mapping: Mapping[int, float]) -> str:
     )
 
 
+def _default_mobility_scenarios() -> list[MobilityScenario]:
+    return [
+        MobilityScenario(
+            name="Low mobility",
+            contact_k={
+                PlaceType.HOME: 2,
+                PlaceType.WORKPLACE: 1,
+                PlaceType.SCHOOL: 2,
+                PlaceType.PUBLIC: 1,
+            },
+            public_visit_probability_weekday=0.05,
+            public_visit_probability_weekend=0.10,
+        ),
+        MobilityScenario(
+            name="Medium mobility",
+            contact_k={
+                PlaceType.HOME: 3,
+                PlaceType.WORKPLACE: 5,
+                PlaceType.SCHOOL: 8,
+                PlaceType.PUBLIC: 4,
+            },
+            public_visit_probability_weekday=0.20,
+            public_visit_probability_weekend=0.45,
+        ),
+        MobilityScenario(
+            name="High mobility",
+            contact_k={
+                PlaceType.HOME: 4,
+                PlaceType.WORKPLACE: 10,
+                PlaceType.SCHOOL: 14,
+                PlaceType.PUBLIC: 8,
+            },
+            public_visit_probability_weekday=0.55,
+            public_visit_probability_weekend=0.80,
+        ),
+    ]
+
+def _render_mobility_comparison() -> None:
+    st.subheader(
+        "Different mobility levels"
+    )
+
+    st.caption(
+        "Each scenario uses the same generation parameters, "
+        "fixed random seed, and initial infection count."
+    )
+
+    comparison_days = float(
+        st.number_input(
+            "Comparison duration (days)",
+            min_value=1.0,
+            value=60.0,
+            step=1.0,
+            key="ui_mobility_comparison_days",
+        )
+    )
+
+    if st.button(
+        "Run mobility comparison",
+        use_container_width=True,
+        key="ui_run_mobility_comparison",
+    ):
+        try:
+            base_config = st.session_state[
+                "current_config"
+            ]
+
+            if base_config is None:
+                raise RuntimeError(
+                    "No current configuration is available"
+                )
+
+            initial_infection_count = int(
+                st.session_state.get(
+                    "initial_infection_count",
+                    1,
+                )
+            )
+
+            with st.spinner(
+                "Running mobility scenarios..."
+            ):
+                results = run_mobility_comparison(
+                    base_config=base_config,
+                    scenarios=(
+                        _default_mobility_scenarios()
+                    ),
+                    total_days=comparison_days,
+                    initial_infection_count=(
+                        initial_infection_count
+                    ),
+                )
+
+            st.session_state[
+                "mobility_comparison_results"
+            ] = results
+
+        except Exception as exc:
+            st.error(
+                f"Mobility comparison failed: {exc}"
+            )
+
+    results = st.session_state.get(
+        "mobility_comparison_results"
+    )
+
+    if not results:
+        return
+
+    figure: Figure | None = None
+
+    try:
+        figure = draw_mobility_comparison(
+            results
+        )
+
+        st.pyplot(
+            figure,
+            clear_figure=False,
+        )
+
+    except Exception as exc:
+        st.error(
+            f"Comparison chart failed: {exc}"
+        )
+
+    finally:
+        if figure is not None:
+            plt.close(figure)
