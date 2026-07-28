@@ -128,45 +128,69 @@ class Engine:
         for _ in range(total_ticks):
             self.step()
 
-    def update_runtime_config(self,**overrides: Any) -> None:
+    def update_runtime_config(
+        self,
+        *,
+        apply_immunity_changes_to_recovered: bool = False,
+        **overrides: Any,
+    ) -> None:
         """
-        Replace the runtime configuration.
-    
-        Existing recovery/death outcome events are rescheduled only when
-        recovery_rate or deadly_rate actually changes.
+        Update persistent runtime configuration and coordinate any
+        rescheduling required by the changed fields.
         """
+        if not isinstance(
+            apply_immunity_changes_to_recovered,
+            bool,
+        ):
+            raise TypeError(
+                "apply_immunity_changes_to_recovered must be bool"
+            )
+
         if not overrides:
             return
-    
+
         old_config = self.world.config
-    
+
         if old_config is None:
             raise RuntimeError(
                 "world.config must be set before updating runtime config"
             )
-    
-        # Construct and validate the replacement before changing World.
-        # Unknown field names and invalid values propagate to the caller.
+
         new_config = replace(
             old_config,
             **overrides,
         )
-    
+
         outcome_rates_changed = (
             new_config.recovery_rate
             != old_config.recovery_rate
             or new_config.deadly_rate
             != old_config.deadly_rate
         )
-    
-        # reschedule_all_infected() must see the new rates.
+
+        immunity_settings_changed = (
+            new_config.immunity_duration_mode
+            != old_config.immunity_duration_mode
+            or new_config.mean_immunity_duration
+            != old_config.mean_immunity_duration
+        )
+
         self.world.config = new_config
-    
+
         if outcome_rates_changed:
             self.health_event_system.reschedule_all_infected(
                 self.world
             )
 
+        if (
+            immunity_settings_changed
+            and apply_immunity_changes_to_recovered
+        ):
+            self.health_event_system.reschedule_all_recovered(
+                self.world
+            )
+
+            
     @staticmethod
     def _validate_total_days(
         total_days: float,

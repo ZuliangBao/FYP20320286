@@ -75,11 +75,21 @@ def run(
 
 def update_runtime_config(
     engine: Engine,
+    *,
+    apply_immunity_changes_to_recovered: bool = False,
     **overrides: Any,
 ) -> None:
+    """
+    Update persistent runtime configuration and optionally apply
+    immunity-setting changes to people who are already recovered.
+    """
     engine.update_runtime_config(
+        apply_immunity_changes_to_recovered=(
+            apply_immunity_changes_to_recovered
+        ),
         **overrides,
     )
+
 
 def seed_infections(
     world: World,

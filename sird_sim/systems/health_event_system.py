@@ -2,9 +2,16 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from ..domain.person import HealthState
-from ..events.event import (DieEvent,Event,EventType,RecoverEvent)
+from ..events.event import (
+    DieEvent,
+    Event,
+    EventType,
+    ImmunityWanesEvent,
+    RecoverEvent,
+)
 from ..domain.person import HealthState, Person
 from ..world import World
+from ..config import ImmunityDurationMode
 
 EventHandler = Callable[[World, Event], None]
 
@@ -78,6 +85,75 @@ class HealthEventSystem:
                 )
 
             handler(world, event)
+            
+    def _schedule_immunity_waning(
+        self,
+        world: World,
+        person: Person,
+    ) -> None:
+        """
+        Schedule immunity loss using the current immunity configuration.
+
+        FIXED:
+            The target time is recovered_at + configured duration.
+            Elapsed recovered time is preserved when rescheduling.
+
+        EXPONENTIAL:
+            A fresh waiting time is sampled from world.current_time.
+        """
+        config = world.config
+        current_time = world.current_time
+
+        if config is None or current_time is None:
+            raise RuntimeError(
+                "World configuration and current time are required"
+            )
+
+        mean_duration = config.mean_immunity_duration
+
+        if (
+            config.immunity_duration_mode
+            == ImmunityDurationMode.FIXED
+        ):
+            recovered_at = person.recovered_at
+
+            if recovered_at is None:
+                raise RuntimeError(
+                    "A recovered person must have recovered_at set"
+                )
+
+            immunity_wanes_at = max(
+                current_time,
+                recovered_at + mean_duration,
+            )
+
+        elif (
+            config.immunity_duration_mode
+            == ImmunityDurationMode.EXPONENTIAL
+        ):
+            waiting_time = float(
+                world.rng.exponential(
+                    scale=mean_duration
+                )
+            )
+
+            immunity_wanes_at = (
+                current_time + waiting_time
+            )
+
+        else:
+            raise ValueError(
+                "Unsupported immunity duration mode: "
+                f"{config.immunity_duration_mode!r}"
+            )
+
+        immunity_event = world.event_queue.schedule(
+            ImmunityWanesEvent,
+            time=immunity_wanes_at,
+            person_id=person.person_id,
+        )
+
+        person.pending_event = immunity_event
 
     def _handle_become_infectious(
         self,
@@ -96,6 +172,7 @@ class HealthEventSystem:
             return
 
         person.health_state = HealthState.INFECTED
+        person.recovered_at = None
 
         self._schedule_outcome(
             world,
@@ -194,6 +271,7 @@ class HealthEventSystem:
                 person,
             )
 
+
     def _handle_recover(
         self,
         world: World,
@@ -204,7 +282,14 @@ class HealthEventSystem:
 
         Immunity is currently permanent, so no later event is
         scheduled.
-        """
+        """ 
+        current_time = world.current_time
+
+        if current_time is None:
+            raise RuntimeError(
+                "world.current_time must be set"
+            )
+
         person = world.get_person(event.person_id)
 
         if person.health_state == HealthState.DEAD:
@@ -213,20 +298,14 @@ class HealthEventSystem:
             return
 
         person.health_state = HealthState.RECOVERED
+
+        person.recovered_at = current_time
         person.pending_event = None
 
-        # Future immunity-waning support:
-        #
-        # immunity_event = world.event_queue.schedule(
-        #     ImmunityWanesEvent,
-        #     time=(
-        #         world.current_time
-        #         + world.config.immunity_duration
-        #     ),
-        #     person_id=person.person_id,
-        # )
-        #
-        # person.pending_event = immunity_event
+        self._schedule_immunity_waning(
+            world,
+            person,
+        )
 
     def _handle_die(
         self,
@@ -240,6 +319,7 @@ class HealthEventSystem:
         person = world.get_person(event.person_id)
 
         person.health_state = HealthState.DEAD
+        person.recovered_at = None
         person.pending_event = None
 
         world.remove_from_place(person)
@@ -261,6 +341,31 @@ class HealthEventSystem:
 
         person.health_state = HealthState.SUSCEPTIBLE
         person.pending_event = None
+        person.recovered_at = None
+
+    def reschedule_all_recovered(
+        self,
+        world: World,
+    ) -> None:
+        """
+        Reschedule immunity-waning events for all recovered people using
+        the current immunity configuration.
+        """
+        for person in world.persons.values():
+            if person.health_state != HealthState.RECOVERED:
+                continue
+
+            old_event = person.pending_event
+
+            if old_event is not None:
+                world.event_queue.cancel(old_event)
+                person.pending_event = None
+
+            self._schedule_immunity_waning(
+                world,
+                person,
+            )
+
 
     @staticmethod
     def _probability_to_hazard(

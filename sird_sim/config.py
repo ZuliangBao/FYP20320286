@@ -6,7 +6,11 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
 from .domain.place import PlaceType
+from enum import Enum, auto
 
+class ImmunityDurationMode(Enum):
+    FIXED = auto()
+    EXPONENTIAL = auto()
 
 @dataclass(frozen=True, kw_only=True)
 class SimulationConfig:
@@ -29,8 +33,6 @@ class SimulationConfig:
     # Probability of visiting public places
     public_visit_probability_weekday: float
     public_visit_probability_weekend: float
-
-
 
     # ============================================================
     # Population, place, and relationship generation
@@ -80,6 +82,19 @@ class SimulationConfig:
     # Rng seed
     # ============================================================
     seed: int | None = None
+
+    # ============================================================
+    # Immunity part
+    # ============================================================    
+    immunity_duration: float = 24.0 * 90.0
+
+    immunity_duration_mode: ImmunityDurationMode = (
+        ImmunityDurationMode.FIXED
+    )
+
+    mean_immunity_duration: float = 90.0 * 24.0
+    
+
 
     def __post_init__(self) -> None:
         # ========================================================
@@ -266,6 +281,66 @@ class SimulationConfig:
                 raise ValueError(
                     "seed must be an integer or None"
                 )
+
+        # ========================================================
+        # Immunity validation
+        # ======================================================== 
+        if isinstance(self.immunity_duration, bool):
+            raise TypeError(
+                "immunity_duration must be a number, not bool"
+            )
+
+        if not isinstance(
+            self.immunity_duration,
+            (int, float),
+        ):
+            raise TypeError(
+                "immunity_duration must be numeric"
+            )
+
+        if not math.isfinite(self.immunity_duration):
+            raise ValueError(
+                "immunity_duration must be finite"
+            )
+
+        if self.immunity_duration <= 0.0:
+            raise ValueError(
+                "immunity_duration must be greater than 0"
+            )
+
+        if not isinstance(
+            self.immunity_duration_mode,
+            ImmunityDurationMode,
+        ):
+            raise TypeError(
+                "immunity_duration_mode must be an "
+                "ImmunityDurationMode"
+            )
+
+        if isinstance(self.mean_immunity_duration, bool):
+            raise TypeError(
+                "mean_immunity_duration must be numeric, not bool"
+            )
+
+        if not isinstance(
+            self.mean_immunity_duration,
+            (int, float),
+        ):
+            raise TypeError(
+                "mean_immunity_duration must be numeric"
+            )
+
+        if not math.isfinite(
+            self.mean_immunity_duration
+        ):
+            raise ValueError(
+                "mean_immunity_duration must be finite"
+            )
+
+        if self.mean_immunity_duration <= 0.0:
+            raise ValueError(
+                "mean_immunity_duration must be greater than 0"
+            )
     # ============================================================
     # Validation helpers
     # ============================================================

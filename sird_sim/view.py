@@ -9,9 +9,10 @@ from matplotlib.figure import Figure
 import streamlit as st
 
 from . import controller, plotting
-from .config import SimulationConfig
+from .config import ImmunityDurationMode,SimulationConfig
 from .domain.place import PlaceType
 
+MAX_POPULATION_SIZE = 1_000
 
 TICK_DURATION_OPTIONS = [0.25, 0.5, 1.0, 3.0, 6.0, 12.0, 24.0]
 
@@ -33,6 +34,8 @@ DEFAULT_GENERATION: dict[str, Any] = {
     "min_friend_count": 3,
     "max_friend_count": 8,
     "friend_weight": 1.0,
+    "use_fixed_seed": 42,
+    "seed": 42,
 }
 
 DEFAULT_RUNTIME: dict[str, Any] = {
@@ -69,7 +72,7 @@ def render() -> None:
 
     with st.sidebar:
         generation_values = _render_generation_controls()
-        runtime_values = _render_runtime_controls()
+        (runtime_values,apply_immunity_changes_to_recovered) = _render_runtime_controls()
 
         st.divider()
         total_days = float(
@@ -89,10 +92,34 @@ def render() -> None:
         _render_continue_button(
             runtime_values,
             total_days,
+            apply_immunity_changes_to_recovered,
         )
 
     _render_main_area()
 
+
+def _cap_population_size() -> None:
+    population_size = st.session_state.get(
+        "ui_population_size"
+    )
+
+    if population_size is None:
+        return
+
+    if population_size > MAX_POPULATION_SIZE:
+        st.session_state[
+            "ui_population_size"
+        ] = MAX_POPULATION_SIZE
+
+        st.session_state["_notice"] = (
+            "warning",
+            (
+                "Population size was limited to "
+                f"{MAX_POPULATION_SIZE:,} because larger "
+                "simulations may be too slow for the "
+                "interactive interface."
+            ),
+        )
 
 def _initialize_session_state() -> None:
     defaults = {
@@ -103,6 +130,11 @@ def _initialize_session_state() -> None:
         "current_config": None,
         "day_count": 0.0,
         "_notice": None,
+
+        # Widget initial value
+        "ui_population_size": DEFAULT_GENERATION[
+            "population_size"
+        ],
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -130,132 +162,179 @@ def _render_generation_controls() -> dict[str, Any]:
     if disabled:
         st.caption("Generation parameters are locked after generation.")
 
-    population_size = int(
-        st.number_input(
-            "Population size",
-            min_value=2,
-            max_value=100_000,
-            value=DEFAULT_GENERATION["population_size"],
-            step=100,
-            disabled=disabled,
-            key="ui_population_size",
-        )
+    confirm_reset = st.checkbox(
+        (
+            "I understand that editing these parameters will "
+            "discard the current simulation results."
+        ),
+        value=False,
+        key="ui_confirm_reset",
     )
 
-    initial_infection_count = int(
-        st.number_input(
-            "Initial infected households",
-            min_value=0,
-            max_value=population_size,
-            value=1,
-            step=1,
+    edit_generation_parameters = st.button(
+        "Edit generation parameters",
+        disabled=not confirm_reset,
+        use_container_width=True,
+        key="ui_edit_generation_parameters",
+    )
+
+    if edit_generation_parameters:
+        st.session_state["has_generated"] = False
+        st.rerun()
+
+    with st.expander("Generation parameter"):
+        population_size = int(
+            st.number_input(
+                "Population size",
+                min_value=2,
+                max_value=100_000,
+                step=100,
+                disabled=disabled,
+                key="ui_population_size",
+                on_change=_cap_population_size,
+                help=(
+                    "Values above 1,000 are automatically "
+                    "reduced to 1,000."
+                ),
+            )
+        )
+
+        initial_infection_count = int(
+            st.number_input(
+                "Initial infected households",
+                min_value=0,
+                max_value=population_size,
+                value=1,
+                step=1,
+                disabled=disabled,
+                key="ui_initial_infection_count",
+                help=(
+                    "Seeds at most one initially infected person "
+                    "per selected household."
+                ),
+            )
+        )
+
+        tick_duration = float(
+            st.selectbox(
+                "Tick duration (hours)",
+                options=TICK_DURATION_OPTIONS,
+                index=TICK_DURATION_OPTIONS.index(
+                    DEFAULT_GENERATION["tick_duration"]
+                ),
+                disabled=disabled,
+                key="ui_tick_duration",
+                help=(
+                    "Tick duration is fixed when the world is generated. "
+                    "Changing it later would alter the number of contact "
+                    "sampling rounds per day."
+                ),
+            )
+        )
+
+        use_fixed_seed = st.checkbox(
+            "Use fixed random seed",
+            value=DEFAULT_GENERATION["use_fixed_seed"],
             disabled=disabled,
-            key="ui_initial_infection_count",
+            key="ui_use_fixed_seed",
             help=(
-                "Seeds at most one initially infected person "
-                "per selected household."
+                "Using the same seed and configuration reproduces "
+                "the same generated world."
             ),
         )
-    )
 
-    tick_duration = float(
-        st.selectbox(
-            "Tick duration (hours)",
-            options=TICK_DURATION_OPTIONS,
-            index=TICK_DURATION_OPTIONS.index(
-                DEFAULT_GENERATION["tick_duration"]
+        seed_value = int(
+            st.number_input(
+                "Random seed",
+                value=DEFAULT_GENERATION["seed"],
+                step=1,
+                disabled=disabled or not use_fixed_seed,
+                key="ui_seed",
+            )
+        )
+
+        seed = seed_value if use_fixed_seed else None
+
+        student_ratio = float(
+            st.slider(
+                "Student ratio",
+                0.0,
+                1.0,
+                DEFAULT_GENERATION["student_ratio"],
+                0.01,
+                disabled=disabled,
+                key="ui_student_ratio",
+            )
+        )
+        employment_rate = float(
+            st.slider(
+                "Employment rate",
+                0.0,
+                1.0,
+                DEFAULT_GENERATION["employment_rate"],
+                0.01,
+                disabled=disabled,
+                key="ui_employment_rate",
+            )
+        )
+        school_utilization_rate = float(
+            st.slider(
+                "School utilization rate",
+                0.01,
+                1.0,
+                DEFAULT_GENERATION["school_utilization_rate"],
+                0.01,
+                disabled=disabled,
+                key="ui_school_utilization_rate",
+            )
+        )
+
+        household_distribution_text = st.text_area(
+            "Household-size distribution",
+            value=_mapping_to_json(
+                DEFAULT_GENERATION["household_size_distribution"]
             ),
             disabled=disabled,
-            key="ui_tick_duration",
-            help=(
-                "Tick duration is fixed when the world is generated. "
-                "Changing it later would alter the number of contact "
-                "sampling rounds per day."
+            key="ui_household_size_distribution",
+        )
+        workplace_distribution_text = st.text_area(
+            "Workplace-size distribution",
+            value=_mapping_to_json(
+                DEFAULT_GENERATION["workplace_size_distribution"]
             ),
+            disabled=disabled,
+            key="ui_workplace_size_distribution",
         )
-    )
+        school_distribution_text = st.text_area(
+            "School-size distribution",
+            value=_mapping_to_json(
+                DEFAULT_GENERATION["school_size_distribution"]
+            ),
+            disabled=disabled,
+            key="ui_school_size_distribution",
+        )
 
-    student_ratio = float(
-        st.slider(
-            "Student ratio",
-            0.0,
-            1.0,
-            DEFAULT_GENERATION["student_ratio"],
-            0.01,
-            disabled=disabled,
-            key="ui_student_ratio",
+        public_place_count = int(
+            st.number_input(
+                "Number of public places",
+                min_value=0,
+                value=DEFAULT_GENERATION["public_place_count"],
+                step=1,
+                disabled=disabled,
+                key="ui_public_place_count",
+            )
         )
-    )
-    employment_rate = float(
-        st.slider(
-            "Employment rate",
-            0.0,
-            1.0,
-            DEFAULT_GENERATION["employment_rate"],
-            0.01,
-            disabled=disabled,
-            key="ui_employment_rate",
+        public_place_capacity = int(
+            st.number_input(
+                "Public-place capacity",
+                min_value=1,
+                value=DEFAULT_GENERATION["public_place_capacity"],
+                step=10,
+                disabled=disabled,
+                key="ui_public_place_capacity",
+            )
         )
-    )
-    school_utilization_rate = float(
-        st.slider(
-            "School utilization rate",
-            0.01,
-            1.0,
-            DEFAULT_GENERATION["school_utilization_rate"],
-            0.01,
-            disabled=disabled,
-            key="ui_school_utilization_rate",
-        )
-    )
 
-    household_distribution_text = st.text_area(
-        "Household-size distribution",
-        value=_mapping_to_json(
-            DEFAULT_GENERATION["household_size_distribution"]
-        ),
-        disabled=disabled,
-        key="ui_household_size_distribution",
-    )
-    workplace_distribution_text = st.text_area(
-        "Workplace-size distribution",
-        value=_mapping_to_json(
-            DEFAULT_GENERATION["workplace_size_distribution"]
-        ),
-        disabled=disabled,
-        key="ui_workplace_size_distribution",
-    )
-    school_distribution_text = st.text_area(
-        "School-size distribution",
-        value=_mapping_to_json(
-            DEFAULT_GENERATION["school_size_distribution"]
-        ),
-        disabled=disabled,
-        key="ui_school_size_distribution",
-    )
-
-    public_place_count = int(
-        st.number_input(
-            "Number of public places",
-            min_value=0,
-            value=DEFAULT_GENERATION["public_place_count"],
-            step=1,
-            disabled=disabled,
-            key="ui_public_place_count",
-        )
-    )
-    public_place_capacity = int(
-        st.number_input(
-            "Public-place capacity",
-            min_value=1,
-            value=DEFAULT_GENERATION["public_place_capacity"],
-            step=10,
-            disabled=disabled,
-            key="ui_public_place_capacity",
-        )
-    )
-
-    with st.expander("Relationship generation"):
         workmate_target_degree = int(
             st.number_input(
                 "Workmate target degree",
@@ -322,11 +401,11 @@ def _render_generation_controls() -> dict[str, Any]:
                 key="ui_friend_weight",
             )
         )
-
     return {
         "population_size": population_size,
         "tick_duration": tick_duration,
         "initial_infection_count": initial_infection_count,
+        "seed": seed,
         "student_ratio": student_ratio,
         "employment_rate": employment_rate,
         "school_utilization_rate": school_utilization_rate,
@@ -345,89 +424,197 @@ def _render_generation_controls() -> dict[str, Any]:
     }
 
 
-def _render_runtime_controls() -> dict[str, Any]:
+def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
     st.header("Runtime parameters")
 
     with st.expander("Daily schedule"):
-        work_start_hour = _hour_input("Work start hour", "work_start_hour")
-        work_end_hour = _hour_input("Work end hour", "work_end_hour")
-        school_start_hour = _hour_input("School start hour", "school_start_hour")
-        school_end_hour = _hour_input("School end hour", "school_end_hour")
-        public_start_hour = _hour_input("Public start hour", "public_start_hour")
-        public_end_hour = _hour_input("Public end hour", "public_end_hour")
+        work_start_hour = _hour_input(
+            "Work start hour",
+            "work_start_hour",
+        )
+        work_end_hour = _hour_input(
+            "Work end hour",
+            "work_end_hour",
+        )
+        school_start_hour = _hour_input(
+            "School start hour",
+            "school_start_hour",
+        )
+        school_end_hour = _hour_input(
+            "School end hour",
+            "school_end_hour",
+        )
+        public_start_hour = _hour_input(
+            "Public start hour",
+            "public_start_hour",
+        )
+        public_end_hour = _hour_input(
+            "Public end hour",
+            "public_end_hour",
+        )
 
         public_visit_probability_weekday = float(
             st.slider(
                 "Weekday public-visit probability",
-                0.0,
-                1.0,
-                DEFAULT_RUNTIME["public_visit_probability_weekday"],
-                0.01,
+                min_value=0.0,
+                max_value=1.0,
+                value=DEFAULT_RUNTIME[
+                    "public_visit_probability_weekday"
+                ],
+                step=0.01,
                 key="ui_public_visit_probability_weekday",
             )
         )
+
         public_visit_probability_weekend = float(
             st.slider(
                 "Weekend public-visit probability",
-                0.0,
-                1.0,
-                DEFAULT_RUNTIME["public_visit_probability_weekend"],
-                0.01,
+                min_value=0.0,
+                max_value=1.0,
+                value=DEFAULT_RUNTIME[
+                    "public_visit_probability_weekend"
+                ],
+                step=0.01,
                 key="ui_public_visit_probability_weekend",
             )
         )
 
     with st.expander("Contact sampling"):
-        home_k = _contact_input("Home contact K", PlaceType.HOME)
-        workplace_k = _contact_input("Workplace contact K", PlaceType.WORKPLACE)
-        school_k = _contact_input("School contact K", PlaceType.SCHOOL)
-        public_k = _contact_input("Public contact K", PlaceType.PUBLIC)
-
-    infection_probability = float(
-        st.number_input(
-            "Transmission probability per contact",
-            min_value=0.0,
-            max_value=0.999,
-            value=DEFAULT_RUNTIME["infection_probability"],
-            step=0.001,
-            format="%.4f",
-            key="ui_infection_probability",
+        home_k = _contact_input(
+            "Home contact K",
+            PlaceType.HOME,
         )
-    )
-    
-    recovery_rate = float(
-        st.number_input(
-            "Recovery probability per tick",
-            min_value=0.0,
-            max_value=0.999,
-            value=DEFAULT_RUNTIME["recovery_rate"],
-            step=0.001,
-            format="%.4f",
-            key="ui_recovery_rate",
+        workplace_k = _contact_input(
+            "Workplace contact K",
+            PlaceType.WORKPLACE,
         )
-    )
-
-    deadly_rate = float(
-        st.number_input(
-            "Recovery probability per tick",
-            min_value=0.0,
-            max_value=0.999,
-            value=DEFAULT_RUNTIME["deadly_rate"],
-            step=0.001,
-            format="%.4f",
-            key="ui_deadly_rate",
+        school_k = _contact_input(
+            "School contact K",
+            PlaceType.SCHOOL,
         )
-    )
+        public_k = _contact_input(
+            "Public contact K",
+            PlaceType.PUBLIC,
+        )
 
-    return {
+    with st.expander(
+        "Disease progression",
+        expanded=False,
+    ):
+        infection_probability = float(
+            st.number_input(
+                "Transmission probability per contact",
+                min_value=0.0,
+                max_value=0.999,
+                value=DEFAULT_RUNTIME[
+                    "infection_probability"
+                ],
+                step=0.001,
+                format="%.4f",
+                key="ui_infection_probability",
+            )
+        )
+
+        recovery_rate = float(
+            st.number_input(
+                "Recovery probability per tick",
+                min_value=0.0,
+                max_value=0.999,
+                value=DEFAULT_RUNTIME["recovery_rate"],
+                step=0.001,
+                format="%.4f",
+                key="ui_recovery_rate",
+            )
+        )
+
+        deadly_rate = float(
+            st.number_input(
+                "Death probability per tick",
+                min_value=0.0,
+                max_value=0.999,
+                value=DEFAULT_RUNTIME["deadly_rate"],
+                step=0.001,
+                format="%.4f",
+                key="ui_deadly_rate",
+            )
+        )
+
+    with st.expander(
+        "Immunity",
+        expanded=False,
+    ):
+        immunity_mode_label = st.selectbox(
+            "Immunity duration model",
+            options=[
+                "Fixed duration",
+                "Exponential distribution",
+            ],
+            key="ui_immunity_duration_mode",
+            help=(
+                "Fixed gives every recovered person the same "
+                "immunity duration. Exponential treats the entered "
+                "duration as the population mean."
+            ),
+        )
+
+        immunity_duration_mode = (
+            ImmunityDurationMode.FIXED
+            if immunity_mode_label == "Fixed duration"
+            else ImmunityDurationMode.EXPONENTIAL
+        )
+
+        mean_immunity_duration_days = float(
+            st.number_input(
+                "Mean immunity duration (days)",
+                min_value=0.01,
+                value=90.0,
+                step=1.0,
+                key="ui_mean_immunity_duration_days",
+                help=(
+                    "In fixed mode, this is the exact duration. "
+                    "In exponential mode, this is the mean duration."
+                ),
+            )
+        )
+
+        # Simulation time is measured in hours.
+        mean_immunity_duration = (
+            mean_immunity_duration_days * 24.0
+        )
+
+        apply_immunity_changes_to_recovered = bool(
+            st.checkbox(
+                (
+                    "Apply immunity-setting changes immediately "
+                    "to currently recovered people"
+                ),
+                value=False,
+                key=(
+                    "ui_apply_immunity_changes_to_recovered"
+                ),
+                help=(
+                    "When enabled, changing the immunity model "
+                    "or mean duration reschedules immunity loss "
+                    "for people who are already recovered. "
+                    "When disabled, the new settings only affect "
+                    "future recoveries."
+                ),
+            )
+        )
+
+    runtime_values: dict[str, Any] = {
         "work_start_hour": work_start_hour,
         "work_end_hour": work_end_hour,
         "school_start_hour": school_start_hour,
         "school_end_hour": school_end_hour,
         "public_start_hour": public_start_hour,
         "public_end_hour": public_end_hour,
-        "public_visit_probability_weekday": public_visit_probability_weekday,
-        "public_visit_probability_weekend": public_visit_probability_weekend,
+        "public_visit_probability_weekday": (
+            public_visit_probability_weekday
+        ),
+        "public_visit_probability_weekend": (
+            public_visit_probability_weekend
+        ),
         "contact_k": {
             PlaceType.HOME: home_k,
             PlaceType.WORKPLACE: workplace_k,
@@ -437,8 +624,14 @@ def _render_runtime_controls() -> dict[str, Any]:
         "infection_probability": infection_probability,
         "recovery_rate": recovery_rate,
         "deadly_rate": deadly_rate,
+        "immunity_duration_mode": immunity_duration_mode,
+        "mean_immunity_duration": mean_immunity_duration,
     }
 
+    return (
+        runtime_values,
+        apply_immunity_changes_to_recovered,
+    )
 
 def _hour_input(label: str, config_name: str) -> float:
     return float(
@@ -470,7 +663,7 @@ def _render_regenerate_button(
     runtime_values: Mapping[str, Any],
 ) -> None:
     if not st.button(
-        "Regenerate world",
+        "Generate world",
         type="primary",
         use_container_width=True,
     ):
@@ -509,8 +702,9 @@ def _render_regenerate_button(
 
 
 def _render_continue_button(
-    runtime_values: Mapping[str, Any],
+    runtime_values: dict[str, Any],
     total_days: float,
+    apply_immunity_changes_to_recovered: bool,
 ) -> None:
     if not st.button(
         "Continue simulation",
@@ -532,10 +726,11 @@ def _render_continue_button(
         }
         if changed_overrides:
             controller.update_runtime_config(
-                world,
+                engine,
+                apply_immunity_changes_to_recovered=apply_immunity_changes_to_recovered,
                 **changed_overrides,
             )
-            st.session_state["current_config"] = world.config
+            st.session_state["current_config"] = engine.world.config
 
         controller.run(engine, total_days)
         st.session_state["day_count"] += total_days
@@ -551,6 +746,7 @@ def _build_config(
     generation_kwargs = {
         "population_size": generation_values["population_size"],
         "tick_duration": generation_values["tick_duration"],
+        "seed": generation_values["seed"],
         "student_ratio": generation_values["student_ratio"],
         "employment_rate": generation_values["employment_rate"],
         "school_utilization_rate": generation_values["school_utilization_rate"],
