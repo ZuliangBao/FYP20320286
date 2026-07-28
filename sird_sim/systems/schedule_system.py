@@ -61,9 +61,9 @@ class ScheduleSystem:
         
         if(self._is_public_time(world)):
             probability = (
-                world.config.public_visit_probability_weekend
+                world.require_config().public_visit_probability_weekend
                 if self._is_weekend(world)
-                else world.config.public_visit_probability_weekday
+                else world.require_config().public_visit_probability_weekday
             )
             
             if world.rng.random() < probability:
@@ -84,9 +84,9 @@ class ScheduleSystem:
         hour = self._current_hour(world)
 
         return(
-            world.config.work_start_hour
+            world.require_config().work_start_hour
             <= hour <=
-            world.config.work_end_hour
+            world.require_config().work_end_hour
         )
         
 
@@ -100,9 +100,9 @@ class ScheduleSystem:
         hour = self._current_hour(world)
 
         return(
-            world.config.school_start_hour
+            world.require_config().school_start_hour
             <= hour <=
-            world.config.school_end_hour
+            world.require_config().school_end_hour
         )        
 
     def _is_public_time(
@@ -112,9 +112,9 @@ class ScheduleSystem:
             hour = self._current_hour(world)
 
             return(
-                world.config.public_start_hour
+                world.require_config().public_start_hour
                 <= hour <=
-                world.config.public_end_hour
+                world.require_config().public_end_hour
             )   
 
     def _current_hour(self, world: World) -> float:

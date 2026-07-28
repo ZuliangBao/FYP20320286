@@ -29,7 +29,7 @@ class Person:
 
     # Dynamic state
     health_state: HealthState = HealthState.SUSCEPTIBLE
-    current_place_id: int     
+    current_place_id: int | None = None    
 
     # Next scheduled event
     pending_event: Optional[Event] = None

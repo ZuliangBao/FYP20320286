@@ -1,22 +1,20 @@
 from __future__ import annotations
-
 import json
 from collections.abc import Callable, Mapping
-from typing import Any
-
+from typing import Any, cast
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 import streamlit as st
-
 from . import controller, plotting
 from .config import ImmunityDurationMode,SimulationConfig
 from .domain.place import PlaceType
-
 from .mobility_experiment import (
+    MobilityResult,
     MobilityScenario,
     draw_mobility_comparison,
     run_mobility_comparison,
 )
+
 
 MAX_POPULATION_SIZE = 1_000
 
@@ -221,7 +219,8 @@ def _render_generation_controls() -> dict[str, Any]:
             )
         )
 
-        tick_duration = float(
+        tick_duration = cast(
+            float,
             st.selectbox(
                 "Tick duration (hours)",
                 options=TICK_DURATION_OPTIONS,
@@ -261,38 +260,52 @@ def _render_generation_controls() -> dict[str, Any]:
 
         seed = seed_value if use_fixed_seed else None
 
-        student_ratio = float(
+        student_ratio = cast(
+            float,
             st.slider(
                 "Student ratio",
-                0.0,
-                1.0,
-                DEFAULT_GENERATION["student_ratio"],
-                0.01,
+                min_value=0.0,
+                max_value=1.0,
+                value=float(
+                    DEFAULT_GENERATION["student_ratio"]
+                ),
+                step=0.01,
                 disabled=disabled,
                 key="ui_student_ratio",
-            )
+            ),
         )
-        employment_rate = float(
+
+
+        employment_rate = cast(
+            float,
             st.slider(
                 "Employment rate",
-                0.0,
-                1.0,
-                DEFAULT_GENERATION["employment_rate"],
-                0.01,
+                min_value=0.0,
+                max_value=1.0,
+                value=float(
+                    DEFAULT_GENERATION["employment_rate"]
+                ),
+                step=0.01,
                 disabled=disabled,
                 key="ui_employment_rate",
-            )
+            ),
         )
-        school_utilization_rate = float(
+
+        school_utilization_rate = cast(
+            float,
             st.slider(
                 "School utilization rate",
-                0.01,
-                1.0,
-                DEFAULT_GENERATION["school_utilization_rate"],
-                0.01,
+                min_value=0.01,
+                max_value=1.0,
+                value=float(
+                    DEFAULT_GENERATION[
+                        "school_utilization_rate"
+                    ]
+                ),
+                step=0.01,
                 disabled=disabled,
                 key="ui_school_utilization_rate",
-            )
+            ),
         )
 
         household_distribution_text = st.text_area(
@@ -460,20 +473,24 @@ def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
             "public_end_hour",
         )
 
-        public_visit_probability_weekday = float(
+        public_visit_probability_weekday = cast(
+            float,
             st.slider(
                 "Weekday public-visit probability",
                 min_value=0.0,
                 max_value=1.0,
-                value=DEFAULT_RUNTIME[
-                    "public_visit_probability_weekday"
-                ],
+                value=float(
+                    DEFAULT_RUNTIME[
+                        "public_visit_probability_weekday"
+                    ]
+                ),
                 step=0.01,
                 key="ui_public_visit_probability_weekday",
-            )
+            ),
         )
 
-        public_visit_probability_weekend = float(
+        public_visit_probability_weekend = cast(
+            float,
             st.slider(
                 "Weekend public-visit probability",
                 min_value=0.0,
@@ -483,7 +500,7 @@ def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
                 ],
                 step=0.01,
                 key="ui_public_visit_probability_weekend",
-            )
+            ),
         )
 
     with st.expander("Contact sampling"):
@@ -1034,39 +1051,63 @@ def _render_mobility_comparison() -> None:
                     ),
                 )
 
+            comparison_results = run_mobility_comparison(
+                base_config=base_config,
+                scenarios=_default_mobility_scenarios(),
+                total_days=comparison_days,
+                initial_infection_count=(
+                    initial_infection_count
+                ),
+            )
+
             st.session_state[
                 "mobility_comparison_results"
-            ] = results
+            ] = comparison_results
 
         except Exception as exc:
             st.error(
                 f"Mobility comparison failed: {exc}"
             )
 
-    results = st.session_state.get(
+        stored_results = cast(
+            list[MobilityResult] | None,
+            st.session_state.get(
+                "mobility_comparison_results"
+            ),
+        )
+
+        if not stored_results:
+            return
+
+    raw_results = st.session_state.get(
         "mobility_comparison_results"
     )
-
-    if not results:
+    
+    if raw_results is None:
         return
-
+    
+    stored_results = cast(
+        list[MobilityResult],
+        raw_results,
+    )
+    
     figure: Figure | None = None
 
     try:
         figure = draw_mobility_comparison(
-            results
+            stored_results
         )
-
+    
         st.pyplot(
             figure,
             clear_figure=False,
         )
-
+    
     except Exception as exc:
         st.error(
             f"Comparison chart failed: {exc}"
         )
-
+    
     finally:
         if figure is not None:
             plt.close(figure)

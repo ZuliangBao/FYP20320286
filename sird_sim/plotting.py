@@ -1,14 +1,12 @@
 from __future__ import annotations
-
 from collections import Counter
 from collections.abc import Sequence
-
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-import networkx as nx
+import networkx as nx  # type: ignore[import-untyped]
 import numpy as np
-
 from .domain.place import PlaceType
+from .domain.relationship import Relationship
 from .systems.metrics_system import (
     MetricsSnapshot,
     OccupancySnapshot,
@@ -397,7 +395,7 @@ def _friend_count(
 
 
 def _relationship_endpoints(
-    relationship: object,
+    relationship: Relationship,
 ) -> tuple[int, int]:
     """
     Return the two endpoint IDs from a Relationship.
@@ -420,7 +418,7 @@ def _relationship_endpoints(
 
 
 def _relationship_type_name(
-    relationship: object,
+    relationship: Relationship,
 ) -> str:
     """
     Return the enum name of a relationship type.

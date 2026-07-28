@@ -126,7 +126,7 @@ class TransmissionSystem:
         - place-specific transmission
         - relationship weights
         """
-        return world.config.infection_probability
+        return world.require_config().infection_probability
 
     @staticmethod
     def _validate_probability(

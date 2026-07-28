@@ -113,6 +113,8 @@ def seed_infections(
             "count must be a non-negative integer"
         )
 
+    current_time = world.require_current_time()
+
     members_by_home: dict[int, list[int]] = defaultdict(list)
 
     for person in world.persons.values():
@@ -152,7 +154,7 @@ def seed_infections(
 
         event = world.event_queue.schedule(
             BecomeInfectiousEvent,
-            time=world.current_time,
+            time=current_time,
             person_id=selected_person_id,
         )
 

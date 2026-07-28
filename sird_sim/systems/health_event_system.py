@@ -45,14 +45,15 @@ class HealthEventSystem:
         Process every event whose time is less than or equal to the
         current simulation time.
         """
-
+        current_time = world.require_current_time()
+        
         while True:
             next_event_time = world.event_queue.peek_time()
 
             if next_event_time is None:
                 break
 
-            if next_event_time > world.current_time:
+            if next_event_time > current_time:
                 break
 
             event = world.event_queue.pop_next()
@@ -82,35 +83,35 @@ class HealthEventSystem:
     ) -> None:
         """
         Schedule immunity loss using the current immunity configuration.
-    
+
         FIXED:
             The target time is recovered_at + configured duration.
             Elapsed recovered time is preserved when rescheduling.
-    
+
         EXPONENTIAL:
             A fresh waiting time is sampled from world.current_time.
         """
         config = world.require_config()
         current_time = world.require_current_time()
-    
+
         mean_duration = config.mean_immunity_duration
-    
+
         if (
             config.immunity_duration_mode
             == ImmunityDurationMode.FIXED
         ):
             recovered_at = person.recovered_at
-    
+
             if recovered_at is None:
                 raise RuntimeError(
                     "A recovered person must have recovered_at set"
                 )
-    
+
             immunity_wanes_at = max(
                 current_time,
                 recovered_at + mean_duration,
             )
-    
+
         elif (
             config.immunity_duration_mode
             == ImmunityDurationMode.EXPONENTIAL
@@ -120,23 +121,23 @@ class HealthEventSystem:
                     scale=mean_duration
                 )
             )
-    
+
             immunity_wanes_at = (
                 current_time + waiting_time
             )
-    
+
         else:
             raise ValueError(
                 "Unsupported immunity duration mode: "
                 f"{config.immunity_duration_mode!r}"
             )
-    
+
         immunity_event = world.event_queue.schedule(
             ImmunityWanesEvent,
             time=immunity_wanes_at,
             person_id=person.person_id,
         )
-    
+
         person.pending_event = immunity_event
 
     def _handle_become_infectious(
