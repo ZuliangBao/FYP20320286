@@ -34,3 +34,5 @@ class Person:
     # Next scheduled event
     pending_event: Optional[Event] = None
 
+    # Immunity recovered
+    recovered_at: float | None = None
