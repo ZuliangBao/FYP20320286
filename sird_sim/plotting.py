@@ -431,7 +431,7 @@ def _relationship_type_name(
     """
     try:
         relationship_type = (
-            relationship.relationship_type
+            relationship.relation_type
         )
     except AttributeError as exc:
         raise AttributeError(
