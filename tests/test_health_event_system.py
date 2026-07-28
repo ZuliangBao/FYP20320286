@@ -19,7 +19,7 @@ from sird_sim.events.event import (
 from sird_sim.events.event_queue import EventQueue
 from sird_sim.systems.health_event_system import HealthEventSystem
 from sird_sim.world import World
-
+from sird_sim.config import ImmunityDurationMode
 
 @pytest.fixture
 def minimal_world() -> World:
@@ -60,6 +60,8 @@ def minimal_world() -> World:
             tick_duration=1.0,
             recovery_rate=0.2,
             deadly_rate=0.05,
+            immunity_duration_mode=ImmunityDurationMode.EXPONENTIAL,
+            mean_immunity_duration=90.0,
         ),
         current_time=0.0,
     )
@@ -318,13 +320,14 @@ def test_step_processes_all_due_events_in_one_call(
     health_event_system.step(minimal_world)
 
     assert recovering_person.health_state == HealthState.RECOVERED
-    assert recovering_person.pending_event is None
+    assert isinstance(recovering_person.pending_event, ImmunityWanesEvent)
 
     assert immunity_waning_person.health_state == HealthState.SUSCEPTIBLE
     assert immunity_waning_person.pending_event is None
 
-    assert minimal_world.event_queue.is_empty()
-    assert len(minimal_world.event_queue) == 0
+    # recovering_person now has a freshly scheduled ImmunityWanesEvent,
+    # so the queue is no longer empty after this step.
+    assert len(minimal_world.event_queue) == 1
 
 
 # ============================================================
@@ -508,7 +511,7 @@ def test_competing_risks_death_branch_matches_theoretical_probability(
 # _handle_recover
 # ============================================================
 
-def test_handle_recover_sets_recovered_and_clears_pending_event(
+def test_handle_recover_sets_recovered_and_schedules_immunity_waning(
     minimal_world: World,
     health_event_system: HealthEventSystem,
 ) -> None:
@@ -528,7 +531,8 @@ def test_handle_recover_sets_recovered_and_clears_pending_event(
     )
 
     assert person.health_state == HealthState.RECOVERED
-    assert person.pending_event is None
+    assert isinstance(person.pending_event, ImmunityWanesEvent)
+    assert person.recovered_at == minimal_world.current_time
 
 
 def test_stale_recover_event_for_dead_person_clears_itself(

@@ -1,7 +1,7 @@
 import numpy as np
 from sird_sim.config import SimulationConfig
 from sird_sim.generation import generate_world
-from .sird_sim.domain.place import PlaceType
+from sird_sim.domain.place import PlaceType
 
 config = SimulationConfig(
     # Schedule
@@ -32,10 +32,12 @@ config = SimulationConfig(
         4: 0.3,
         5: 0.2,
     },
+
     workplace_size_distribution={
         10: 0.5,
         20: 0.5,
     },
+
     school_size_distribution={
         10: 0.5,
         20: 0.5,
@@ -56,12 +58,17 @@ config = SimulationConfig(
     max_friend_count=10,
     friend_weight=0.5,
 
-    contact_k={
+    contact_k = {
         PlaceType.HOME: 4,
         PlaceType.WORKPLACE: 6,
         PlaceType.SCHOOL: 8,
         PlaceType.PUBLIC: 3,
-    }
+    },
+
+    tick_duration=1.0,
+    infection_probability=0.08,
+    recovery_rate=0.05,
+    deadly_rate=0.005,
 )
 
 rng = np.random.default_rng(seed=42)

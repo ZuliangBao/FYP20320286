@@ -15,7 +15,9 @@ from sird_sim.events.event import (
 )
 
 from sird_sim.events.event_queue import EventQueue
-from sird_sim.systems.health_system import HealthSystem
+from sird_sim.systems.health_event_system import (
+    HealthEventSystem,
+)
 from sird_sim.world import World
 
 
@@ -53,10 +55,6 @@ def main() -> None:
         },
     )
 
-    # 这里只提供 HealthSystem 实际需要的配置字段。
-    #
-    # infection_probability=1.0：
-    # 保证第一次接触一定感染，避免 smoke test 随机失败。
     config = SimpleNamespace(
         tick_duration=1.0,
         infection_probability=1.0,
@@ -88,7 +86,7 @@ def main() -> None:
         (infected_id, susceptible_id)
     }
 
-    health_system = HealthSystem()
+    health_system = HealthEventSystem()
 
     # ============================================================
     # 2. 第一次 step：接触导致感染事件被排入队列
