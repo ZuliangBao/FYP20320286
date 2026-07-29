@@ -12,9 +12,7 @@ class ContactSystem:
         the current step.
         """
         if world.config is None:
-            raise RuntimeError(
-                "World.config must be set before ContactSystem.step()"
-            )
+            raise RuntimeError("World.config must be set before ContactSystem.step()")
         
         world.pending_contacts.clear()
 
@@ -24,9 +22,7 @@ class ContactSystem:
             if member_count < 2:
                 continue
 
-            contact_k = world.config.contact_k[
-                place.place_type
-            ]
+            contact_k = world.config.contact_k[place.place_type]
 
             effective_k = min(
                 contact_k,
@@ -78,9 +74,7 @@ def _sample_unique_indices(
         raise ValueError("sample_size cannot be negative")
 
     if sample_size > population_size:
-        raise ValueError(
-            "sample_size cannot exceed population_size"
-        )
+        raise ValueError("sample_size cannot exceed population_size")
 
     selected: set[int] = set()
 
@@ -109,20 +103,21 @@ def _sample_indices_excluding(
     rng: np.random.Generator,
 ) -> list[int]:
     """
-    Sample distinct indices from range(population_size), excluding
-    excluded_index, without scanning or filtering the full population.
+    Sample distinct indices from range(population_size), skipping
+    excluded_index, without building or filtering an excluded list.
+
+    Draws sample_size indices from a virtual space of
+    population_size - 1 slots (i.e. everyone except excluded_index),
+    then shifts any virtual index >= excluded_index up by one to map
+    it back into the real index space.
     """
     if not 0 <= excluded_index < population_size:
-        raise ValueError(
-            "excluded_index is outside the population"
-        )
+        raise ValueError("excluded_index is outside the population")
 
     available_count = population_size - 1
 
     if sample_size > available_count:
-        raise ValueError(
-            "sample_size exceeds the number of available indices"
-        )
+        raise ValueError("sample_size exceeds the number of available indices")
 
     virtual_indices = _sample_unique_indices(
         population_size=available_count,

@@ -16,7 +16,6 @@ from .systems.transmission_system import TransmissionSystem
 from .world import World
 import numpy as np
 
-
 def generate(
     config: SimulationConfig,
     seed: int | None = None
@@ -29,7 +28,6 @@ def generate(
     """
 
     return generate_world(config,np.random.default_rng(seed))
-
 
 def build_engine(
     world: World,
@@ -63,7 +61,6 @@ def build_engine(
 
     return engine, metrics_system
 
-
 def run(
     engine: Engine,
     total_days: float,
@@ -80,8 +77,10 @@ def update_runtime_config(
     **overrides: Any,
 ) -> None:
     """
-    Update persistent runtime configuration and optionally apply
-    immunity-setting changes to people who are already recovered.
+    Update persistent runtime configuration.
+
+    See Engine.update_runtime_config for the exact rescheduling
+    semantics (which config changes trigger which retroactive effects).
     """
     engine.update_runtime_config(
         apply_immunity_changes_to_recovered=(
@@ -89,7 +88,6 @@ def update_runtime_config(
         ),
         **overrides,
     )
-
 
 def seed_infections(
     world: World,
@@ -101,17 +99,16 @@ def seed_infections(
     Exactly one person is selected from each sampled household. Health
     state is not changed directly; BecomeInfectiousEvent is processed by
     HealthEventSystem during the first engine step.
+
+    Households and their members are processed in sorted order so that
+    seeded runs are reproducible regardless of dict iteration order.
     """
-    # print(f"seed_infections called with count={count}", flush=True)
+    
     if isinstance(count, bool) or not isinstance(count, int):
-        raise ValueError(
-            "count must be a non-negative integer"
-        )
+        raise ValueError("count must be a non-negative integer")
 
     if count < 0:
-        raise ValueError(
-            "count must be a non-negative integer"
-        )
+        raise ValueError("count must be a non-negative integer")
 
     current_time = world.require_current_time()
 
@@ -144,13 +141,9 @@ def seed_infections(
     ).tolist()
 
     for home_id in selected_home_ids:
-        member_ids = sorted(
-            members_by_home[int(home_id)]
-        )
+        member_ids = sorted(members_by_home[int(home_id)])
 
-        selected_person_id = int(
-            world.rng.choice(member_ids)
-        )
+        selected_person_id = int(world.rng.choice(member_ids))
 
         event = world.event_queue.schedule(
             BecomeInfectiousEvent,
@@ -158,6 +151,4 @@ def seed_infections(
             person_id=selected_person_id,
         )
 
-        world.persons[
-            selected_person_id
-        ].pending_event = event
+        world.persons[selected_person_id].pending_event = event

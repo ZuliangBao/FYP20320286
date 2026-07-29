@@ -10,15 +10,22 @@ import numpy as np
 
 @dataclass
 class World:
+    """
+    person_id -> list of Relationships involving that person.
+
+    Each Relationship object is indexed under both participants, so the
+    same object appears in two different lists. Counting relationships
+    by summing len() across all values will double-count; use a set of
+    relationship identities (or iterate a single side's canonical list)
+    to get the true total.
+    """
     persons: dict[int, Person] = field(default_factory=dict)
     places: dict[int, Place] = field(default_factory=dict)
     relationships: dict[int, list[Relationship]] = field(default_factory=dict)
     pending_contacts: set[tuple[int, int]] = field(default_factory=set)
     event_queue: EventQueue = field(default_factory=EventQueue)
     
-    rng: np.random.Generator = field(
-        default_factory=np.random.default_rng
-    )
+    rng: np.random.Generator = field(default_factory=np.random.default_rng)
     config: SimulationConfig | None = None
     current_time: float | None = None
 

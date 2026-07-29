@@ -9,6 +9,14 @@ from .domain.place import PlaceType
 from enum import Enum, auto
 
 class ImmunityDurationMode(Enum):
+    """How long post-recovery immunity lasts before waning.
+
+    FIXED: immunity ends at recovered_at + mean_immunity_duration;
+        elapsed time is preserved when rescheduled.
+    EXPONENTIAL: a fresh duration is resampled from an exponential
+        distribution each time immunity waning is scheduled.
+    """
+    
     FIXED = auto()
     EXPONENTIAL = auto()
 
@@ -349,6 +357,15 @@ class SimulationConfig:
         value: Mapping[PlaceType, int],
         name: str = "contact_k",
     ) -> None:
+        """
+        Validate the contact-count mapping used by the contact system.
+
+        Requirements:
+            1. value must be a mapping.
+            2. Every key must be a PlaceType enum member.
+            3. Every value must be a non-negative integer.
+            4. All supported place types must be present.
+        """
         if not isinstance(value, Mapping):
             raise TypeError(
                 f"{name} must be a mapping from PlaceType to int"
@@ -606,6 +623,16 @@ class SimulationConfig:
         cls,
         data: Mapping[str, Any],
     ) -> SimulationConfig:
+        """
+        Construct a SimulationConfig from a dictionary-like object.
+    
+        This method is mainly intended for configuration data loaded from
+        JSON. JSON object keys are always strings, but the simulation's
+        group-size distribution fields require integer keys.
+    
+        All remaining type and value validation is delegated to the
+        SimulationConfig constructor and its validation methods.
+        """
         parsed_data = dict(data)
 
         # JSON object keys are always strings, so convert the size

@@ -22,6 +22,11 @@ class TransmissionSystem:
     def step(self, world: World) -> None:
         """
         Process all contact pairs generated for the current step.
+
+        Pairs are processed in sorted order (not set iteration order) so
+        that seeded runs remain deterministic. A susceptible person who
+        was already infected earlier in this same step is skipped, since
+        their BecomeInfectiousEvent has already been scheduled.
         """
         if world.config is None:
             raise RuntimeError(
@@ -43,10 +48,7 @@ class TransmissionSystem:
             person_a = world.get_person(person_a_id)
             person_b = world.get_person(person_b_id)
 
-            transmission_pair = self._get_transmission_pair(
-                person_a,
-                person_b,
-            )
+            transmission_pair = self._get_transmission_pair(person_a,person_b)
 
             if transmission_pair is None:
                 continue
@@ -85,7 +87,6 @@ class TransmissionSystem:
     ) -> tuple[Person, Person] | None:
         """
         Return:
-
             (susceptible_person, infected_person)
 
         only when the pair contains exactly one susceptible person and
@@ -139,11 +140,7 @@ class TransmissionSystem:
             )
 
         if not math.isfinite(probability):
-            raise ValueError(
-                "Transmission probability must be finite"
-            )
+            raise ValueError("Transmission probability must be finite")
 
         if not 0.0 <= probability <= 1.0:
-            raise ValueError(
-                "Transmission probability must be in [0.0, 1.0]"
-            )
+            raise ValueError("Transmission probability must be in [0.0, 1.0]")

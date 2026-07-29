@@ -77,6 +77,13 @@ def _generate_places_from_groups(
             place_id -> Place
         member_place_map:
             member index/person_id -> place_id
+    Args:
+    populate_occupants: If True, members are marked as physically
+        present at this place immediately (used for homes, where
+        occupancy equals starting location). If False, occupants
+        starts empty because physical presence is determined later
+        by ScheduleSystem (used for workplaces and schools, which
+        are permanent affiliations, not locations).
     """
     if start_place_id < 0:
         raise ValueError("start_place_id cannot be negative")
@@ -154,9 +161,7 @@ def _generate_workplaces(
             Next unused global place_id
     """
     if start_place_id < 0:
-        raise ValueError(
-            "start_place_id cannot be negative"
-        )
+        raise ValueError("start_place_id cannot be negative")
 
     if (
         not np.isfinite(employment_rate)
@@ -175,9 +180,7 @@ def _generate_workplaces(
     if not worker_ids or employment_rate == 0.0:
         return {}, {}, start_place_id
 
-    target_employed_count = math.floor(
-        len(worker_ids) * employment_rate + 0.5
-    )
+    target_employed_count = math.floor(len(worker_ids) * employment_rate + 0.5)
 
     target_employed_count = min(
         target_employed_count,
@@ -205,9 +208,7 @@ def _generate_workplaces(
     if assignable_count == 0:
         return {}, {}, start_place_id
 
-    employed_worker_ids = employment_candidates[
-        :assignable_count
-    ]
+    employed_worker_ids = employment_candidates[:assignable_count]
 
     workplace_groups = partition_by_size_distribution(
         indices=employed_worker_ids,
@@ -297,17 +298,13 @@ def _generate_schools(
     physical presence, not permanent school membership.
     """
     if start_place_id < 0:
-        raise ValueError(
-            "start_place_id cannot be negative"
-        )
+        raise ValueError("start_place_id cannot be negative")
 
     if (
         not np.isfinite(school_utilization_rate)
         or not 0.0 < school_utilization_rate <= 1.0
     ):
-        raise ValueError(
-            "school_utilization_rate must be in (0.0, 1.0]"
-        )
+        raise ValueError("school_utilization_rate must be in (0.0, 1.0]")
 
     student_ids = [
         person_id
@@ -414,17 +411,11 @@ def _generate_public_places(public_place_count:int, public_place_capacity:int,st
             next unused place_id
     """
     if public_place_count < 0:
-        raise ValueError(
-            "public_place_count cannot be negative"
-        )
+        raise ValueError("public_place_count cannot be negative")
     if public_place_capacity <= 0:
-        raise ValueError(
-            "public_place_capacity must be positive"
-        )
+        raise ValueError("public_place_capacity must be positive")
     if start_place_id < 0:
-        raise ValueError(
-            "start_place_id cannot be negative"
-        )
+        raise ValueError("start_place_id cannot be negative")
     public_places: dict[int, Place] = {}
     for offset in range(public_place_count):
         place_id = start_place_id + offset
@@ -455,6 +446,11 @@ def _generate_persons(roles, home_map, workplace_map, school_map) -> dict[int, P
     return persons
 
 def _generate_family_relationships(homes: dict[int, Place],) -> list[Relationship]:
+        """
+        Create a FAMILY relationship between every pair of people sharing a home.
+
+        weight is fixed at 1 as the baseline against which the configurable workmate/schoolmate/friend weights are scaled.
+        """
         relationships = []
 
         for home in homes.values():
@@ -482,16 +478,12 @@ def _generate_group_relationships(
     """
     Generate a sparse peer relationship network randomly within a member group. 
     Each candidate edge is generated independently, so as to ensure the expected average degree of the members
-    close target_degree。
+    close target_degree.
     """
     if not np.isfinite(target_degree) or target_degree < 0:
-        raise ValueError(
-            "target_degree must be finite and non-negative"
-        )
+        raise ValueError("target_degree must be finite and non-negative")
     if not np.isfinite(weight) or weight < 0:
-        raise ValueError(
-            "weight must be finite and non-negative"
-        )
+        raise ValueError("weight must be finite and non-negative")
     
     relationships: list[Relationship] = []
     # Zero or one person cannot establish a relationship between individuals.
@@ -537,13 +529,9 @@ def _generate_friend_relationships(
     if min_friends < 0:
         raise ValueError("min_friends cannot be negative")
     if max_friends < min_friends:
-        raise ValueError(
-            "max_friends cannot be smaller than min_friends"
-        )
+        raise ValueError("max_friends cannot be smaller than min_friends")
     if not np.isfinite(weight) or weight < 0:
-        raise ValueError(
-            "weight must be finite and non-negative"
-        )
+        raise ValueError("weight must be finite and non-negative")
     person_ids = sorted(persons)
     if len(person_ids) < 2:
         return []
@@ -720,30 +708,46 @@ def _group_members_by_place(
     return members_by_place
 
 def generate_world(config: SimulationConfig, rng: np.random.Generator) -> World:
+    """
+    Build a fully populated World from a SimulationConfig.
+
+    Assigns roles, generates homes/workplaces/schools/public places,
+    builds the family/workmate/schoolmate/friend relationship
+    networks, and returns a World with current_time set to 0.0.
+
+    Each relationship is stored under both participants' person_ids
+    in the returned World.relationships mapping.
+    """
     population_size = config.population_size
     roles = _assign_roles(population_size, config.student_ratio, rng)
 
     next_place_id = 0
-    homes, person_home_map, next_place_id = _generate_homes(population_size=population_size,
-                                                            household_size_distribution=config.household_size_distribution,
-                                                            rng=rng,
-                                                            start_place_id=next_place_id,)
-    workplaces, person_workplace_map, next_place_id = _generate_workplaces(roles=roles,
-                                                                           workplace_size_distribution=config.workplace_size_distribution,
-                                                                           employment_rate=config.employment_rate,
-                                                                           rng=rng,
-                                                                           start_place_id=next_place_id,)
-    schools, person_school_map, next_place_id = _generate_schools(roles=roles,
-                                                                  school_size_distribution = config.school_size_distribution,
-                                                                  school_utilization_rate=config.school_utilization_rate,
-                                                                  rng=rng,
-                                                                  start_place_id=next_place_id,)
+    homes, person_home_map, next_place_id = _generate_homes(
+        population_size=population_size,
+        household_size_distribution=config.household_size_distribution,
+        rng=rng,
+        start_place_id=next_place_id,
+    )
+
+    workplaces, person_workplace_map, next_place_id = _generate_workplaces(
+        roles=roles,
+        workplace_size_distribution=config.workplace_size_distribution,
+        employment_rate=config.employment_rate,
+        rng=rng,
+        start_place_id=next_place_id,
+    )
+    schools, person_school_map, next_place_id = _generate_schools(
+        roles=roles,
+        school_size_distribution = config.school_size_distribution,
+        school_utilization_rate=config.school_utilization_rate,
+        rng=rng,
+        start_place_id=next_place_id,
+    )
     public_places, next_place_id = _generate_public_places(
         public_place_count=config.public_place_count,
         public_place_capacity=config.public_place_capacity,
         start_place_id=next_place_id,
     )
-
 
     all_places = {**homes, **workplaces, **schools, **public_places}
 
@@ -753,7 +757,9 @@ def generate_world(config: SimulationConfig, rng: np.random.Generator) -> World:
         workplace_map=person_workplace_map,
         school_map=person_school_map,
     )
+
     family_relationships = _generate_family_relationships(homes)
+
     workplace_members = _group_members_by_place(
         person_place_map=person_workplace_map,
         valid_place_ids=workplaces.keys(),
@@ -771,6 +777,7 @@ def generate_world(config: SimulationConfig, rng: np.random.Generator) -> World:
         weight=config.workmate_weight,
         rng=rng,
     )
+
     schoolmate_relationships = _generate_group_relationships(
         members_by_place=school_members,
         relation_type=RelationType.SCHOOLMATE,
@@ -778,6 +785,7 @@ def generate_world(config: SimulationConfig, rng: np.random.Generator) -> World:
         weight=config.schoolmate_weight,
         rng=rng,
     )
+    
     friend_relationships = _generate_friend_relationships(
         persons=persons,
         family_relationships=family_relationships,

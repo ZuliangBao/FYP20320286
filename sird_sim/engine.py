@@ -28,7 +28,6 @@ class Engine:
         metrics_system: MetricsSystem,
     ) -> None:
         self.world = world
-
         self.health_event_system = health_event_system
         self.schedule_system = schedule_system
         self.contact_system = contact_system
@@ -49,14 +48,10 @@ class Engine:
             6. Advance simulation time.
         """
         if self.world.config is None:
-            raise RuntimeError(
-                "world.config must be set before Engine.step()"
-            )
+            raise RuntimeError("world.config must be set before Engine.step()")
 
         if self.world.current_time is None:
-            raise RuntimeError(
-                "world.current_time must be set before Engine.step()"
-            )
+            raise RuntimeError("world.current_time must be set before Engine.step()")
 
         self.health_event_system.step(self.world)
         self.schedule_system.step(self.world)
@@ -64,9 +59,7 @@ class Engine:
         self.transmission_system.step(self.world)
         self.metrics_system.step(self.world)
 
-        self.world.current_time += (
-            self.world.config.tick_duration
-        )
+        self.world.current_time += self.world.config.tick_duration
 
     def run(self, total_days: float) -> None:
         """
@@ -83,9 +76,7 @@ class Engine:
         self._validate_total_days(total_days)
 
         if self.world.config is None:
-            raise RuntimeError(
-                "world.config must be set before Engine.run()"
-            )
+            raise RuntimeError("world.config must be set before Engine.run()")
 
         tick_duration = self.world.config.tick_duration
 
@@ -106,9 +97,7 @@ class Engine:
                 f"which gives {ticks_per_day} ticks per day"
             )
 
-        total_ticks_float = (
-            total_days * rounded_ticks_per_day
-        )
+        total_ticks_float = total_days * rounded_ticks_per_day
         total_ticks = round(total_ticks_float)
 
         if not math.isclose(
@@ -135,16 +124,27 @@ class Engine:
         **overrides: Any,
     ) -> None:
         """
-        Update persistent runtime configuration and coordinate any
-        rescheduling required by the changed fields.
+        Update persistent runtime configuration and reschedule as needed.
+
+        If recovery_rate or deadly_rate changes, all currently INFECTED
+        people have their outcome events rescheduled immediately — this
+        retroactive effect always applies.
+
+        If immunity_duration_mode or mean_immunity_duration changes,
+        already-RECOVERED people are only rescheduled when
+        apply_immunity_changes_to_recovered is True. Otherwise they keep
+        their existing immunity-waning schedule, and only people who
+        recover after this call use the new settings.
+
+        Raises:
+            TypeError: If apply_immunity_changes_to_recovered is not bool.
+            RuntimeError: If world.config has not been set yet.
         """
         if not isinstance(
             apply_immunity_changes_to_recovered,
             bool,
         ):
-            raise TypeError(
-                "apply_immunity_changes_to_recovered must be bool"
-            )
+            raise TypeError("apply_immunity_changes_to_recovered must be bool")
 
         if not overrides:
             return
@@ -152,9 +152,7 @@ class Engine:
         old_config = self.world.config
 
         if old_config is None:
-            raise RuntimeError(
-                "world.config must be set before updating runtime config"
-            )
+            raise RuntimeError("world.config must be set before updating runtime config")
 
         new_config = replace(
             old_config,
@@ -190,51 +188,34 @@ class Engine:
                 self.world
             )
 
-            
     @staticmethod
     def _validate_total_days(
         total_days: float,
     ) -> None:
         if isinstance(total_days, bool):
-            raise TypeError(
-                "total_days must be a number, not bool"
-            )
+            raise TypeError("total_days must be a number, not bool")
 
         if not isinstance(total_days, (int, float)):
-            raise TypeError(
-                "total_days must be an int or float"
-            )
+            raise TypeError("total_days must be an int or float")
 
         if not math.isfinite(total_days):
-            raise ValueError(
-                "total_days must be finite"
-            )
+            raise ValueError("total_days must be finite")
 
         if total_days < 0.0:
-            raise ValueError(
-                "total_days cannot be negative"
-            )
+            raise ValueError("total_days cannot be negative")
 
     @staticmethod
     def _validate_tick_duration(
         tick_duration: float,
     ) -> None:
         if isinstance(tick_duration, bool):
-            raise TypeError(
-                "tick_duration must be a number, not bool"
-            )
+            raise TypeError("tick_duration must be a number, not bool")
 
         if not isinstance(tick_duration, (int, float)):
-            raise TypeError(
-                "tick_duration must be an int or float"
-            )
+            raise TypeError("tick_duration must be an int or float")
 
         if not math.isfinite(tick_duration):
-            raise ValueError(
-                "tick_duration must be finite"
-            )
+            raise ValueError("tick_duration must be finite")
 
         if tick_duration <= 0.0:
-            raise ValueError(
-                "tick_duration must be greater than 0"
-            )
+            raise ValueError("tick_duration must be greater than 0")

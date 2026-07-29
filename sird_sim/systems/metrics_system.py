@@ -20,7 +20,6 @@ class MetricsSnapshot:
     recovered: int
     dead: int
 
-
 @dataclass(frozen=True)
 class OccupancySnapshot:
     """
@@ -32,7 +31,6 @@ class OccupancySnapshot:
     workplace: int
     school: int
     public: int
-
 
 class MetricsSystem:
     """
@@ -47,8 +45,8 @@ class MetricsSystem:
         self.occupancy_history: list[OccupancySnapshot] = []
         
     def step(self, world: World) -> None:
-        """
-        Count people in each health state and append one snapshot.
+        """Record one MetricsSnapshot (health-state counts) and one
+        OccupancySnapshot (place-type counts) for the current time.
         """
         current_time = world.current_time
         if current_time is None:

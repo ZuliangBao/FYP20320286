@@ -21,7 +21,6 @@ class MobilityScenario:
     public_visit_probability_weekday: float
     public_visit_probability_weekend: float
 
-
 @dataclass(frozen=True, slots=True)
 class MobilityResult:
     """Simulation result for one mobility scenario."""
@@ -36,15 +35,36 @@ def run_mobility_comparison(
     total_days: float,
     initial_infection_count: int,
 ) -> list[MobilityResult]:
+    """Run one simulation per mobility scenario and collect their
+    metrics history for comparison.
+
+    Each scenario overrides contact_k and public_visit_probability_*
+    on top of base_config; every other parameter is held fixed. All
+    scenarios are generated and run with the same base_config.seed,
+    so that differences between scenarios' outcomes can be
+    attributed to the mobility parameters alone, not random
+    variation.
+
+    Args:
+        base_config: Baseline configuration; must have seed set.
+        scenarios: Mobility parameter sets to compare.
+        total_days: Simulated duration for each scenario.
+        initial_infection_count: Households seeded with an initial
+            infection, applied identically in every scenario.
+
+    Returns:
+        One MobilityResult per scenario, in the same order as
+        scenarios.
+
+    Raises:
+        ValueError: If base_config.seed is None, or scenarios is
+            empty.
+    """
     if base_config.seed is None:
-        raise ValueError(
-            "Mobility comparison requires a fixed random seed"
-        )
+        raise ValueError("Mobility comparison requires a fixed random seed")
 
     if not scenarios:
-        raise ValueError(
-            "At least one mobility scenario is required"
-        )
+        raise ValueError("At least one mobility scenario is required")
 
     results: list[MobilityResult] = []
 
@@ -52,33 +72,17 @@ def run_mobility_comparison(
         scenario_config = replace(
             base_config,
             contact_k=dict(scenario.contact_k),
-            public_visit_probability_weekday=(
-                scenario.public_visit_probability_weekday
-            ),
-            public_visit_probability_weekend=(
-                scenario.public_visit_probability_weekend
-            ),
+            public_visit_probability_weekday=(scenario.public_visit_probability_weekday),
+            public_visit_probability_weekend=(scenario.public_visit_probability_weekend),
         )
 
-        world = controller.generate(
-            scenario_config,
-            seed=base_config.seed,
-        )
+        world = controller.generate(scenario_config,seed=base_config.seed)
 
-        controller.seed_infections(
-            world,
-            count=initial_infection_count,
-        )
+        controller.seed_infections(world,count=initial_infection_count)
 
-        engine, metrics_system = controller.build_engine(
-            world,
-            scenario_config,
-        )
+        engine, metrics_system = controller.build_engine(world,scenario_config)
 
-        controller.run(
-            engine,
-            total_days,
-        )
+        controller.run(engine,total_days)
 
         results.append(
             MobilityResult(
@@ -88,7 +92,6 @@ def run_mobility_comparison(
         )
 
     return results
-
 
 def draw_mobility_comparison(
     results: Sequence[MobilityResult],
@@ -100,9 +103,7 @@ def draw_mobility_comparison(
     lines on one coordinate system.
     """
     if not results:
-        raise ValueError(
-            "results cannot be empty"
-        )
+        raise ValueError("results cannot be empty")
 
     fig, axes = plt.subplots(
         nrows=2,
@@ -161,9 +162,6 @@ def draw_mobility_comparison(
         )
         ax.legend()
 
-    fig.suptitle(
-        "SIRD comparison under different mobility levels"
-    )
-
+    fig.suptitle("SIRD comparison under different mobility levels")
     fig.tight_layout()
     return fig

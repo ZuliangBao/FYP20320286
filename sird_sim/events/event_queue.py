@@ -9,7 +9,6 @@ from .event import Event
 
 logger = logging.getLogger(__name__)
 
-
 class EventQueue:
     """
     Priority queue for simulation events.
@@ -44,6 +43,21 @@ class EventQueue:
         person_id: int,
         **extra,
     ) -> Event:
+        """Construct and schedule an event, returning it so the caller
+        can track or later cancel it.
+
+        Args:
+            event_cls: The Event subclass to instantiate (e.g.
+                RecoverEvent, DieEvent).
+            time: The simulation time at which the event should fire.
+            person_id: The person this event applies to.
+            **extra: Additional fields specific to event_cls (e.g.
+                source_person_id for BecomeInfectiousEvent, cause for
+                DieEvent).
+
+        Returns:
+            The newly created and scheduled Event instance.
+        """
         sequence = next(self._sequence_counter)
 
         event = event_cls(
@@ -133,11 +147,16 @@ class EventQueue:
         return event
 
     def cancel(self, event: Event) -> None:
-        """
-        Cancel an event using lazy deletion.
+        """Cancel an event using lazy deletion.
 
         The event stops counting as active immediately, but remains in
-        the heap until it reaches the front.
+        the heap until it reaches the front. Calling this again on an
+        already-cancelled event is a no-op.
+
+        Raises:
+            ValueError: If event is not currently scheduled in this
+                queue (e.g. already popped, or belongs to a different
+                EventQueue).
         """
         queued_event = self._queued_events.get(event.sequence)
 

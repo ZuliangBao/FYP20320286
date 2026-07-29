@@ -15,7 +15,6 @@ from .world import World
 
 NETWORK_GRAPH_PERSON_LIMIT = 300
 
-
 def draw_sird_chart(
     history: Sequence[MetricsSnapshot],
 ) -> Figure:
@@ -25,9 +24,7 @@ def draw_sird_chart(
     The function only creates and returns a Matplotlib Figure.
     It does not call plt.show().
     """
-    fig, ax = plt.subplots(
-        figsize=(10, 5),
-    )
+    fig, ax = plt.subplots(figsize=(10, 5))
 
     if not history:
         _draw_empty_message(
@@ -82,24 +79,14 @@ def draw_sird_chart(
         label="Dead",
     )
 
-    ax.set_title(
-        "SIRD population over time"
-    )
-    ax.set_xlabel(
-        "Simulation time"
-    )
-    ax.set_ylabel(
-        "Population"
-    )
+    ax.set_title("SIRD population over time")
+    ax.set_xlabel("Simulation time")
+    ax.set_ylabel("Population")
     ax.legend()
-    ax.grid(
-        visible=True,
-        alpha=0.3,
-    )
+    ax.grid(visible=True,alpha=0.3)
 
     fig.tight_layout()
     return fig
-
 
 def draw_occupancy_chart(
     occupancy_history: Sequence[OccupancySnapshot],
@@ -157,22 +144,12 @@ def draw_occupancy_chart(
         ],
     )
 
-    ax.set_title(
-        "Place occupancy over time"
-    )
-    ax.set_xlabel(
-        "Simulation time"
-    )
-    ax.set_ylabel(
-        "Current occupants"
-    )
-    ax.legend(
-        loc="upper right",
-    )
-
+    ax.set_title("Place occupancy over time")
+    ax.set_xlabel("Simulation time")
+    ax.set_ylabel("Current occupants")
+    ax.legend(loc="upper right")
     fig.tight_layout()
     return fig
-
 
 def draw_network_graph(
     world: World,
@@ -180,9 +157,14 @@ def draw_network_graph(
     """
     Draw the static relationship network.
 
-    Return None when the population exceeds the configured visualization
-    threshold. The caller decides whether to hide the option or display
-    an explanatory message.
+    Return None when the population exceeds the configured
+    visualization threshold. The caller decides whether to hide the
+    option or display an explanatory message.
+
+    Node labels are only drawn when person_count <= 50, since larger
+    networks become unreadable with labels. Layout positions use a
+    fixed seed (independent of world.rng) so the same graph renders
+    with a stable layout across repeated calls.
     """
     person_count = len(world.persons)
 
@@ -192,28 +174,19 @@ def draw_network_graph(
     graph: nx.Graph[int] = nx.Graph()
 
     # Add people first so isolated people are still displayed.
-    graph.add_nodes_from(
-        world.persons.keys()
-    )
+    graph.add_nodes_from(world.persons.keys())
 
     # The same Relationship object may appear in both endpoint
     # adjacency lists. nx.Graph automatically deduplicates the edge.
     for relationships in world.relationships.values():
         for relationship in relationships:
             person_a_id, person_b_id = (
-                _relationship_endpoints(
-                    relationship
-                )
+                _relationship_endpoints(relationship)
             )
 
-            graph.add_edge(
-                person_a_id,
-                person_b_id,
-            )
+            graph.add_edge(person_a_id,person_b_id)
 
-    fig, ax = plt.subplots(
-        figsize=(9, 7),
-    )
+    fig, ax = plt.subplots(figsize=(9, 7))
 
     if graph.number_of_nodes() == 0:
         _draw_empty_message(
@@ -222,10 +195,7 @@ def draw_network_graph(
         )
         return fig
 
-    positions = nx.spring_layout(
-        graph,
-        seed=42,
-    )
+    positions = nx.spring_layout(graph,seed=42)
 
     # Large node labels quickly become unreadable.
     show_labels = person_count <= 50
@@ -240,14 +210,10 @@ def draw_network_graph(
         width=0.7,
     )
 
-    ax.set_title(
-        "Relationship network"
-    )
+    ax.set_title("Relationship network")
     ax.set_axis_off()
-
     fig.tight_layout()
     return fig
-
 
 def draw_generation_histograms(
     world: World,
@@ -329,13 +295,10 @@ def draw_generation_histograms(
         x_label="Friends per person",
     )
 
-    fig.suptitle(
-        "Generated world distributions"
-    )
+    fig.suptitle("Generated world distributions")
     fig.tight_layout()
 
     return fig
-
 
 def _affiliation_group_sizes(
     affiliation_ids: Sequence[int | None],
@@ -352,7 +315,6 @@ def _affiliation_group_sizes(
     )
 
     return list(counts.values())
-
 
 def _friend_count(
     world: World,
@@ -391,7 +353,6 @@ def _friend_count(
 
     return len(friend_ids)
 
-
 def _relationship_endpoints(
     relationship: Relationship,
 ) -> tuple[int, int]:
@@ -414,7 +375,6 @@ def _relationship_endpoints(
 
     return int(person_a_id), int(person_b_id)
 
-
 def _relationship_type_name(
     relationship: Relationship,
 ) -> str:
@@ -426,27 +386,18 @@ def _relationship_type_name(
         relation_type
     """
     try:
-        relationship_type = (
-            relationship.relation_type
-        )
+        relationship_type = (relationship.relation_type)
     except AttributeError as exc:
         raise AttributeError(
             "Relationship must define relation_type"
         ) from exc
 
-    name = getattr(
-        relationship_type,
-        "name",
-        None,
-    )
+    name = getattr(relationship_type,"name",None)
 
     if name is None:
-        return str(
-            relationship_type
-        ).upper()
+        return str(relationship_type).upper()
 
     return str(name).upper()
-
 
 def _draw_integer_histogram(
     *,
@@ -487,7 +438,6 @@ def _draw_integer_histogram(
         axis="y",
         alpha=0.3,
     )
-
 
 def _draw_empty_message(
     ax,

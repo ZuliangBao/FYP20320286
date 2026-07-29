@@ -62,7 +62,6 @@ DEFAULT_RUNTIME: dict[str, Any] = {
     "deadly_rate": 0.005,
 }
 
-
 def render() -> None:
     """Render the complete Streamlit page."""
     st.set_page_config(
@@ -89,18 +88,10 @@ def render() -> None:
             )
         )
 
-        _render_regenerate_button(
-            generation_values,
-            runtime_values,
-        )
-        _render_continue_button(
-            runtime_values,
-            total_days,
-            apply_immunity_changes_to_recovered,
-        )
+        _render_regenerate_button(generation_values,runtime_values)
+        _render_continue_button(runtime_values,total_days,apply_immunity_changes_to_recovered)
 
     _render_main_area()
-
 
 def _cap_population_size() -> None:
     population_size = st.session_state.get(
@@ -111,9 +102,7 @@ def _cap_population_size() -> None:
         return
 
     if population_size > MAX_POPULATION_SIZE:
-        st.session_state[
-            "ui_population_size"
-        ] = MAX_POPULATION_SIZE
+        st.session_state["ui_population_size"] = MAX_POPULATION_SIZE
 
         st.session_state["_notice"] = (
             "warning",
@@ -143,7 +132,6 @@ def _initialize_session_state() -> None:
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
-
 def _show_notice() -> None:
     notice = st.session_state.get("_notice")
     if notice is None:
@@ -157,7 +145,6 @@ def _show_notice() -> None:
         st.warning(message)
     else:
         st.info(message)
-
 
 def _render_generation_controls() -> dict[str, Any]:
     disabled = bool(st.session_state["has_generated"])
@@ -266,9 +253,7 @@ def _render_generation_controls() -> dict[str, Any]:
                 "Student ratio",
                 min_value=0.0,
                 max_value=1.0,
-                value=float(
-                    DEFAULT_GENERATION["student_ratio"]
-                ),
+                value=float(DEFAULT_GENERATION["student_ratio"]),
                 step=0.01,
                 disabled=disabled,
                 key="ui_student_ratio",
@@ -282,9 +267,7 @@ def _render_generation_controls() -> dict[str, Any]:
                 "Employment rate",
                 min_value=0.0,
                 max_value=1.0,
-                value=float(
-                    DEFAULT_GENERATION["employment_rate"]
-                ),
+                value=float(DEFAULT_GENERATION["employment_rate"]),
                 step=0.01,
                 disabled=disabled,
                 key="ui_employment_rate",
@@ -297,11 +280,7 @@ def _render_generation_controls() -> dict[str, Any]:
                 "School utilization rate",
                 min_value=0.01,
                 max_value=1.0,
-                value=float(
-                    DEFAULT_GENERATION[
-                        "school_utilization_rate"
-                    ]
-                ),
+                value=float(DEFAULT_GENERATION["school_utilization_rate"]),
                 step=0.01,
                 disabled=disabled,
                 key="ui_school_utilization_rate",
@@ -443,7 +422,6 @@ def _render_generation_controls() -> dict[str, Any]:
         "friend_weight": friend_weight,
     }
 
-
 def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
     st.header("Runtime parameters")
 
@@ -479,11 +457,7 @@ def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
                 "Weekday public-visit probability",
                 min_value=0.0,
                 max_value=1.0,
-                value=float(
-                    DEFAULT_RUNTIME[
-                        "public_visit_probability_weekday"
-                    ]
-                ),
+                value=float(DEFAULT_RUNTIME["public_visit_probability_weekday"]),
                 step=0.01,
                 key="ui_public_visit_probability_weekday",
             ),
@@ -495,9 +469,7 @@ def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
                 "Weekend public-visit probability",
                 min_value=0.0,
                 max_value=1.0,
-                value=DEFAULT_RUNTIME[
-                    "public_visit_probability_weekend"
-                ],
+                value=DEFAULT_RUNTIME["public_visit_probability_weekend"],
                 step=0.01,
                 key="ui_public_visit_probability_weekend",
             ),
@@ -530,9 +502,7 @@ def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
                 "Transmission probability per contact",
                 min_value=0.0,
                 max_value=0.999,
-                value=DEFAULT_RUNTIME[
-                    "infection_probability"
-                ],
+                value=DEFAULT_RUNTIME["infection_probability"],
                 step=0.001,
                 format="%.4f",
                 key="ui_infection_probability",
@@ -602,9 +572,7 @@ def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
         )
 
         # Simulation time is measured in hours.
-        mean_immunity_duration = (
-            mean_immunity_duration_days * 24.0
-        )
+        mean_immunity_duration = (mean_immunity_duration_days * 24.0)
 
         apply_immunity_changes_to_recovered = bool(
             st.checkbox(
@@ -652,10 +620,7 @@ def _render_runtime_controls() -> tuple[dict[str, Any], bool]:
         "mean_immunity_duration": mean_immunity_duration,
     }
 
-    return (
-        runtime_values,
-        apply_immunity_changes_to_recovered,
-    )
+    return (runtime_values,apply_immunity_changes_to_recovered)
 
 def _hour_input(label: str, config_name: str) -> float:
     return float(
@@ -669,7 +634,6 @@ def _hour_input(label: str, config_name: str) -> float:
         )
     )
 
-
 def _contact_input(label: str, place_type: PlaceType) -> int:
     return int(
         st.number_input(
@@ -680,7 +644,6 @@ def _contact_input(label: str, place_type: PlaceType) -> int:
             key=f"ui_contact_k_{place_type.name.lower()}",
         )
     )
-
 
 def _render_regenerate_button(
     generation_values: Mapping[str, Any],
@@ -724,7 +687,6 @@ def _render_regenerate_button(
     if generation_succeeded:
         st.rerun()
 
-
 def _render_continue_button(
     runtime_values: dict[str, Any],
     total_days: float,
@@ -762,7 +724,6 @@ def _render_continue_button(
     except Exception as exc:
         st.error(f"Simulation failed: {exc}")
 
-
 def _build_config(
     generation_values: Mapping[str, Any],
     runtime_values: Mapping[str, Any],
@@ -798,7 +759,6 @@ def _build_config(
     }
     return SimulationConfig(**generation_kwargs, **dict(runtime_values))
 
-
 def _render_main_area() -> None:
     if not st.session_state["has_generated"]:
         st.info("Configure the world in the sidebar and generate it to begin.")
@@ -813,10 +773,7 @@ def _render_main_area() -> None:
     columns = st.columns(4)
     columns[0].metric("Population", len(world.persons))
     columns[1].metric("Simulated days", f"{st.session_state['day_count']:g}")
-    columns[2].metric(
-        "Current simulation hour",
-        "—" if world.current_time is None else f"{world.current_time:g}",
-    )
+    columns[2].metric("Current simulation hour","—" if world.current_time is None else f"{world.current_time:g}")
     columns[3].metric("Snapshots", len(metrics_system.history))
 
     selected_view = st.radio(
@@ -830,7 +787,6 @@ def _render_main_area() -> None:
         _render_results(metrics_system)
     else:
         _render_generation_plots(world)
-
 
 def _render_results(metrics_system: Any) -> None:
     if not metrics_system.history:
@@ -847,9 +803,7 @@ def _render_results(metrics_system: Any) -> None:
 
     with sird_tab:
         if not metrics_system.history:
-            st.info(
-                "No simulation ticks have been run yet."
-            )
+            st.info("No simulation ticks have been run yet.")
         else:
             _display_plot(
                 lambda: plotting.draw_sird_chart(
@@ -859,9 +813,7 @@ def _render_results(metrics_system: Any) -> None:
 
     with occupancy_tab:
         if not metrics_system.occupancy_history:
-            st.info(
-                "No occupancy snapshots are available."
-            )
+            st.info("No occupancy snapshots are available.")
         else:
             _display_plot(
                 lambda: plotting.draw_occupancy_chart(
@@ -871,7 +823,6 @@ def _render_results(metrics_system: Any) -> None:
 
     with mobility_tab:
         _render_mobility_comparison()
-
 
 def _render_generation_plots(world: Any) -> None:
     choice = st.radio(
@@ -901,7 +852,6 @@ def _render_generation_plots(world: Any) -> None:
         if figure is not None:
             plt.close(figure)
 
-
 def _display_plot(draw: Callable[[], Figure]) -> None:
     figure: Figure | None = None
     try:
@@ -912,7 +862,6 @@ def _display_plot(draw: Callable[[], Figure]) -> None:
     finally:
         if figure is not None:
             plt.close(figure)
-
 
 def _parse_distribution(raw: Any, label: str) -> dict[int, float]:
     if not isinstance(raw, str):
@@ -949,14 +898,12 @@ def _parse_distribution(raw: Any, label: str) -> dict[int, float]:
 
     return result
 
-
 def _mapping_to_json(mapping: Mapping[int, float]) -> str:
     return json.dumps(
         {str(key): value for key, value in mapping.items()},
         indent=2,
         sort_keys=True,
     )
-
 
 def _default_mobility_scenarios() -> list[MobilityScenario]:
     return [
@@ -996,9 +943,7 @@ def _default_mobility_scenarios() -> list[MobilityScenario]:
     ]
 
 def _render_mobility_comparison() -> None:
-    st.subheader(
-        "Different mobility levels"
-    )
+    st.subheader("Different mobility levels")
 
     st.caption(
         "Each scenario uses the same generation parameters, "
@@ -1021,92 +966,51 @@ def _render_mobility_comparison() -> None:
         key="ui_run_mobility_comparison",
     ):
         try:
-            base_config = st.session_state[
-                "current_config"
-            ]
+            base_config = st.session_state["current_config"]
 
             if base_config is None:
-                raise RuntimeError(
-                    "No current configuration is available"
-                )
+                raise RuntimeError("No current configuration is available")
 
             initial_infection_count = int(
-                st.session_state.get(
-                    "initial_infection_count",
-                    1,
-                )
+                st.session_state.get("initial_infection_count",1)
             )
 
-            with st.spinner(
-                "Running mobility scenarios..."
-            ):
-                results = run_mobility_comparison(
+            with st.spinner("Running mobility scenarios..."):
+                comparison_results = run_mobility_comparison(
                     base_config=base_config,
-                    scenarios=(
-                        _default_mobility_scenarios()
-                    ),
+                    scenarios=_default_mobility_scenarios(),
                     total_days=comparison_days,
-                    initial_infection_count=(
-                        initial_infection_count
-                    ),
+                    initial_infection_count=initial_infection_count,
                 )
 
-            comparison_results = run_mobility_comparison(
-                base_config=base_config,
-                scenarios=_default_mobility_scenarios(),
-                total_days=comparison_days,
-                initial_infection_count=(
-                    initial_infection_count
-                ),
-            )
-
-            st.session_state[
-                "mobility_comparison_results"
-            ] = comparison_results
+            st.session_state["mobility_comparison_results"] = comparison_results
 
         except Exception as exc:
-            st.error(
-                f"Mobility comparison failed: {exc}"
-            )
+            st.error(f"Mobility comparison failed: {exc}")
 
         stored_results = cast(
             list[MobilityResult] | None,
-            st.session_state.get(
-                "mobility_comparison_results"
-            ),
+            st.session_state.get("mobility_comparison_results"),
         )
 
         if not stored_results:
             return
 
-    raw_results = st.session_state.get(
-        "mobility_comparison_results"
-    )
+    raw_results = st.session_state.get("mobility_comparison_results")
     
     if raw_results is None:
         return
     
-    stored_results = cast(
-        list[MobilityResult],
-        raw_results,
-    )
-    
+    stored_results = cast(list[MobilityResult],raw_results)
+
     figure: Figure | None = None
 
     try:
-        figure = draw_mobility_comparison(
-            stored_results
-        )
-    
-        st.pyplot(
-            figure,
-            clear_figure=False,
-        )
+        figure = draw_mobility_comparison(stored_results)
+        st.pyplot(figure,clear_figure=False)
     
     except Exception as exc:
-        st.error(
-            f"Comparison chart failed: {exc}"
-        )
+        st.error(f"Comparison chart failed: {exc}")
     
     finally:
         if figure is not None:

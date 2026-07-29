@@ -98,14 +98,16 @@ def _validate_and_materialize_indices(
 
     return member_indices
 
-
-
 def _build_reachable_table(
     total_members: int,
     group_sizes: npt.NDArray[np.int64],
 ) -> npt.NDArray[np.bool_]:
     """
-    reachable [n] indicates whether n members can be precisely formed by the allowed group size.
+    reachable[n] is True iff n members can be exactly partitioned
+    using the allowed group sizes.
+
+    Standard subset-sum dynamic programming: reachable[n] is True iff
+    reachable[n - s] is True for some allowed size s <= n.
     """
     reachable = np.zeros(
         total_members + 1,
@@ -129,6 +131,7 @@ def _build_reachable_table(
         )
 
     return reachable
+
 def largest_partitionable_count(
     total_count: int,
     allowed_sizes: Collection[int],
@@ -193,7 +196,7 @@ def _partition_indices(
     rng: np.random.Generator,
 ) -> list[set[int]]:
     """
-    Complete the actual segmentation using the prepared distribution and accessibility tables.
+    Complete the actual segmentation using the prepared distribution and reachability tables.
     """
     groups: list[set[int]] = []
 
@@ -235,7 +238,10 @@ def _prepare_distribution(
     size_distribution: Mapping[int, float],
 ) -> _Partition:
     """
-    Verify the size distribution and convert it into sorted NumPy arrays.
+    Validate size_distribution and convert it into sorted NumPy arrays.
+
+    Entries with a weight of exactly 0 are silently dropped (only
+    negative weights raise). Raises if no size has positive weight.
     """
     if not size_distribution:
         raise ValueError(
@@ -317,6 +323,12 @@ def _find_eligible_positions(
     The size of a group must simultaneously satisfy the following conditions:
     1. It should not exceed the remaining number of people;
     2. After selection, the remaining number of people should still be able to be divided legally.
+
+    Raises:
+        RuntimeError: If no eligible size exists despite
+            remaining_members being reachable — indicates an internal
+            inconsistency in the reachable table, since the caller
+            already checked reachability before calling this.
     """
     fits_remaining = group_sizes <= remaining_members
 
@@ -366,17 +378,11 @@ def _sample_group_size(
     """
     Select a size from the current legal group size based on the weight.
     """
-    eligible_sizes = distribution.sizes[
-        eligible_positions
-    ]
+    eligible_sizes = distribution.sizes[eligible_positions]
 
-    eligible_weights = distribution.weights[
-        eligible_positions
-    ]
+    eligible_weights = distribution.weights[eligible_positions]
 
-    probabilities = (
-        eligible_weights / eligible_weights.sum()
-    )
+    probabilities = (eligible_weights / eligible_weights.sum())
 
     return int(
         rng.choice(

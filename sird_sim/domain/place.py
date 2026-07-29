@@ -12,6 +12,15 @@ class PlaceType(Enum):
 
 @dataclass
 class Place:
+    """A physical location that can hold people.
+
+    Attributes:
+        place_id: Unique identifier.
+        place_type: The kind of place (HOME/WORKPLACE/SCHOOL/PUBLIC).
+        capacity: Maximum simultaneous occupants, or None for no limit.
+        occupants: person_ids of people currently at this place,
+            kept in sync by World.move_person / World.remove_from_place.
+    """
     # Identity
     place_id: int
     
@@ -21,6 +30,3 @@ class Place:
 
     # Dynamic state
     occupants: set[int] = field(default_factory=set)
-
-
-    

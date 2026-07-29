@@ -103,28 +103,17 @@ class HealthEventSystem:
             recovered_at = person.recovered_at
 
             if recovered_at is None:
-                raise RuntimeError(
-                    "A recovered person must have recovered_at set"
-                )
+                raise RuntimeError("A recovered person must have recovered_at set")
 
-            immunity_wanes_at = max(
-                current_time,
-                recovered_at + mean_duration,
-            )
+            immunity_wanes_at = max(current_time,recovered_at + mean_duration)
 
         elif (
             config.immunity_duration_mode
             == ImmunityDurationMode.EXPONENTIAL
         ):
-            waiting_time = float(
-                world.rng.exponential(
-                    scale=mean_duration
-                )
-            )
+            waiting_time = float(world.rng.exponential(scale=mean_duration))
 
-            immunity_wanes_at = (
-                current_time + waiting_time
-            )
+            immunity_wanes_at = current_time + waiting_time
 
         else:
             raise ValueError(
@@ -243,11 +232,7 @@ class HealthEventSystem:
                 # logically cancelled if scheduling the replacement fails.
                 person.pending_event = None
     
-            self._schedule_outcome(
-                world,
-                person,
-            )
-
+            self._schedule_outcome(world,person)
 
     def _handle_recover(
         self,
@@ -255,11 +240,12 @@ class HealthEventSystem:
         event: Event,
     ) -> None:
         """
-        Change the person to RECOVERED.
+        Change the person to RECOVERED and schedule immunity waning.
 
-        Immunity is currently permanent, so no later event is
-        scheduled.
-        """ 
+        Immunity duration is governed by the current
+        immunity_duration_mode configuration; see
+        _schedule_immunity_waning for FIXED vs EXPONENTIAL behavior.
+        """
         current_time = world.require_current_time()
 
         person = world.get_person(event.person_id)
@@ -329,11 +315,7 @@ class HealthEventSystem:
                 world.event_queue.cancel(old_event)
                 person.pending_event = None
 
-            self._schedule_immunity_waning(
-                world,
-                person,
-            )
-
+            self._schedule_immunity_waning(world,person)
 
     @staticmethod
     def _probability_to_hazard(
@@ -343,37 +325,25 @@ class HealthEventSystem:
         """
         Convert a per-tick probability to a continuous-time hazard:
 
-            lambda = -ln(1 - probability) / tick_duration
+        lambda = -ln(1 - probability) / tick_duration
         """
         if isinstance(probability, bool):
-            raise TypeError(
-                "probability must be a number, not bool"
-            )
+            raise TypeError("probability must be a number, not bool")
 
         if not math.isfinite(probability):
-            raise ValueError(
-                "probability must be finite"
-            )
+            raise ValueError("probability must be finite")
 
         if not 0.0 <= probability < 1.0:
-            raise ValueError(
-                "probability must be in [0.0, 1.0)"
-            )
+            raise ValueError("probability must be in [0.0, 1.0)")
 
         if isinstance(tick_duration, bool):
-            raise TypeError(
-                "tick_duration must be a number, not bool"
-            )
+            raise TypeError("tick_duration must be a number, not bool")
 
         if not math.isfinite(tick_duration):
-            raise ValueError(
-                "tick_duration must be finite"
-            )
+            raise ValueError("tick_duration must be finite")
 
         if tick_duration <= 0.0:
-            raise ValueError(
-                "tick_duration must be greater than 0"
-            )
+            raise ValueError("tick_duration must be greater than 0")
 
         return (
             -math.log1p(-probability)
