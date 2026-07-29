@@ -39,3 +39,7 @@ class RecoverEvent(Event):
 class DieEvent(Event):
     kind: ClassVar[EventType] = EventType.DIE
     cause: str = "disease"  # Leaves room for adding other causes later, e.g. background mortality
+
+@dataclass(kw_only=True)
+class ImmunityWanesEvent(Event):
+    kind: ClassVar[EventType] = EventType.IMMUNITY_WANES
