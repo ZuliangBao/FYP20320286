@@ -13,8 +13,6 @@ from .systems.metrics_system import (
 )
 from .world import World
 
-
-# spring_layout 在节点很多时会明显变慢，也会变得难以阅读。
 NETWORK_GRAPH_PERSON_LIMIT = 300
 
 
@@ -425,7 +423,7 @@ def _relationship_type_name(
 
     This implementation assumes the Relationship field is named:
 
-        relationship_type
+        relation_type
     """
     try:
         relationship_type = (
@@ -433,7 +431,7 @@ def _relationship_type_name(
         )
     except AttributeError as exc:
         raise AttributeError(
-            "Relationship must define relationship_type"
+            "Relationship must define relation_type"
         ) from exc
 
     name = getattr(

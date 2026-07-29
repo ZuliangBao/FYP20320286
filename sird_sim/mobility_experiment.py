@@ -28,8 +28,7 @@ class MobilityResult:
 
     name: str
     history: tuple[MetricsSnapshot, ...]
-
-
+    
 def run_mobility_comparison(
     *,
     base_config: SimulationConfig,
@@ -37,12 +36,6 @@ def run_mobility_comparison(
     total_days: float,
     initial_infection_count: int,
 ) -> list[MobilityResult]:
-    """
-    Run independent simulations under different mobility settings.
-
-    The same fixed seed and the same non-mobility parameters are used
-    for every scenario, so differences should mainly come from mobility.
-    """
     if base_config.seed is None:
         raise ValueError(
             "Mobility comparison requires a fixed random seed"
@@ -67,12 +60,9 @@ def run_mobility_comparison(
             ),
         )
 
-        # Every scenario gets a newly generated world.
-        # Because the seed and generation parameters are identical,
-        # the generated population and initial infection selection
-        # should also be identical.
         world = controller.generate(
-            scenario_config
+            scenario_config,
+            seed=base_config.seed,
         )
 
         controller.seed_infections(
@@ -80,11 +70,9 @@ def run_mobility_comparison(
             count=initial_infection_count,
         )
 
-        engine, metrics_system = (
-            controller.build_engine(
-                world,
-                scenario_config,
-            )
+        engine, metrics_system = controller.build_engine(
+            world,
+            scenario_config,
         )
 
         controller.run(
@@ -95,9 +83,7 @@ def run_mobility_comparison(
         results.append(
             MobilityResult(
                 name=scenario.name,
-                history=tuple(
-                    metrics_system.history
-                ),
+                history=tuple(metrics_system.history),
             )
         )
 
