@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 name = "sird-sim"
 version = "0.1.0"
 description = "An agent-based SIRD epidemic simulation with mobility and contact networks"
-readme = "sird_sim/README.md"
+readme = "README.md"
 requires-python = ">=3.12"
 
 dependencies = [
