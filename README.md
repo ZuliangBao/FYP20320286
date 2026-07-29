@@ -91,8 +91,10 @@ pip install -e ".[dev]"
 ```
 
 On Windows, you can instead double-click `setup.bat` in the project root. It
-creates a dedicated `.venv` virtual environment and installs everything into
-it automatically — no manual environment activation required.
+checks that Python 3.12+ is active, then installs the project and its
+dependencies directly into whatever Python environment is currently active
+(fast if that environment already has packages like numpy/matplotlib/
+streamlit installed).
 
 ## Usage
 
