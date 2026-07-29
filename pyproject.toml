@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "sird-sim"
+version = "0.1.0"
+description = "An agent-based SIRD epidemic simulation with mobility and contact networks"
+readme = "sird_sim/README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "networkx",
+    "streamlit",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "mypy",
+    "types-networkx",
+    "build",
+]
+
+
+[tool.setuptools]
+# Do not package root-level files such as main.py or smoke_test.py
+# as standalone Python modules.
+py-modules = []
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sird_sim*"]
+exclude = ["tests*"]
+namespaces = false
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra --strict-markers"
+
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+show_error_codes = true
+pretty = true
+
+
+[tool.coverage.run]
+source = ["sird_sim"]
+branch = true
+
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

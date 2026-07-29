@@ -806,3 +806,149 @@ def test_reschedule_all_infected_with_zero_hazards_cancels_old_event_only(
     assert old_event.cancelled is True
     assert person.pending_event is None
     assert minimal_world.event_queue.is_empty()
+
+# ============================================================
+# reschedule_all_recovered
+# ============================================================
+
+def test_reschedule_all_recovered_replaces_existing_events(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    minimal_world.config.immunity_duration_mode = (
+        ImmunityDurationMode.FIXED
+    )
+    minimal_world.config.mean_immunity_duration = 10.0
+    minimal_world.current_time = 20.0
+
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.RECOVERED
+    person.recovered_at = 17.0
+
+    old_event = minimal_world.event_queue.schedule(
+        ImmunityWanesEvent,
+        time=100.0,
+        person_id=person.person_id,
+    )
+    person.pending_event = old_event
+
+    health_event_system.reschedule_all_recovered(
+        minimal_world
+    )
+
+    assert old_event.cancelled is True
+    assert isinstance(
+        person.pending_event,
+        ImmunityWanesEvent,
+    )
+    assert person.pending_event is not old_event
+    assert person.pending_event.time == 27.0
+    assert len(minimal_world.event_queue) == 1
+
+
+def test_reschedule_all_recovered_skips_non_recovered_people(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.SUSCEPTIBLE
+    person.recovered_at = None
+    person.pending_event = None
+
+    health_event_system.reschedule_all_recovered(
+        minimal_world
+    )
+
+    assert person.pending_event is None
+    assert minimal_world.event_queue.is_empty()
+
+
+def test_reschedule_all_recovered_handles_missing_old_event(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    minimal_world.config.immunity_duration_mode = (
+        ImmunityDurationMode.FIXED
+    )
+    minimal_world.config.mean_immunity_duration = 10.0
+    minimal_world.current_time = 20.0
+
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.RECOVERED
+    person.recovered_at = 17.0
+    person.pending_event = None
+
+    health_event_system.reschedule_all_recovered(
+        minimal_world
+    )
+
+    assert isinstance(
+        person.pending_event,
+        ImmunityWanesEvent,
+    )
+    assert person.pending_event.time == 27.0
+    assert len(minimal_world.event_queue) == 1
+
+
+def test_reschedule_all_recovered_under_fixed_mode_preserves_recovered_at(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    minimal_world.config.immunity_duration_mode = (
+        ImmunityDurationMode.FIXED
+    )
+    minimal_world.config.mean_immunity_duration = 10.0
+    minimal_world.current_time = 20.0
+
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.RECOVERED
+    person.recovered_at = (
+        minimal_world.current_time - 3.0
+    )
+
+    health_event_system.reschedule_all_recovered(
+        minimal_world
+    )
+
+    assert isinstance(
+        person.pending_event,
+        ImmunityWanesEvent,
+    )
+    assert person.pending_event.time == (
+        person.recovered_at
+        + minimal_world.config.mean_immunity_duration
+    )
+    assert person.pending_event.time == 27.0
+
+
+def test_reschedule_all_recovered_fixed_mode_clamps_expired_immunity_to_now(
+    minimal_world: World,
+    health_event_system: HealthEventSystem,
+) -> None:
+    """
+    If the new fixed duration has already elapsed, the replacement event
+    should be due immediately rather than being scheduled in the past.
+    """
+    minimal_world.config.immunity_duration_mode = (
+        ImmunityDurationMode.FIXED
+    )
+    minimal_world.config.mean_immunity_duration = 10.0
+    minimal_world.current_time = 20.0
+
+    person = minimal_world.get_person(0)
+    person.health_state = HealthState.RECOVERED
+    person.recovered_at = 5.0
+
+    health_event_system.reschedule_all_recovered(
+        minimal_world
+    )
+
+    assert isinstance(
+        person.pending_event,
+        ImmunityWanesEvent,
+    )
+    assert person.pending_event.time == (
+        minimal_world.current_time
+    )
+    assert len(minimal_world.event_queue) == 1
+

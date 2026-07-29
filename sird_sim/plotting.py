@@ -3,7 +3,7 @@ from collections import Counter
 from collections.abc import Sequence
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-import networkx as nx  # type: ignore[import-untyped]
+import networkx as nx  
 import numpy as np
 from .domain.place import PlaceType
 from .domain.relationship import Relationship
@@ -189,7 +189,7 @@ def draw_network_graph(
     if person_count > NETWORK_GRAPH_PERSON_LIMIT:
         return None
 
-    graph = nx.Graph()
+    graph: nx.Graph[int] = nx.Graph()
 
     # Add people first so isolated people are still displayed.
     graph.add_nodes_from(
